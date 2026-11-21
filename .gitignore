@@ -7,7 +7,7 @@ __pycache__/
 # estado local del equipo de trabajo
 .device.lock
 .claude/
-tests/
+/tests/
 docs/handoff/
 docs/fw/
 docs/review-fase3.md
