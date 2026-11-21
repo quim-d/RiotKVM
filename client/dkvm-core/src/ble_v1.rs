@@ -561,15 +561,19 @@ mod tests {
         let d = MockDongle::new();
         d.set_info(&[2, 0, 1, 2, 0, 0, 0, 0]);
         let t = BleTransport::spawn(d.connector(), Box::new(BleV1), BleOptions::default());
-        std::thread::sleep(std::time::Duration::from_millis(300));
-        match t.link_state() {
-            Some(LinkState::Reconnecting { reason, .. }) => assert!(reason.contains("v2"), "{reason}"),
-            other => panic!("debía rechazar el dongle: {other:?}"),
+        // espera por condición (hasta 20 s), no un sleep fijo
+        let t0 = std::time::Instant::now();
+        loop {
+            match t.link_state() {
+                Some(LinkState::Reconnecting { reason, .. }) if reason.contains("v2") => break,
+                other => assert!(t0.elapsed() < std::time::Duration::from_secs(20), "debía rechazar el dongle: {other:?}"),
+            }
+            std::thread::sleep(std::time::Duration::from_millis(5));
         }
         drop(t);
         // y con v1 la orden `info` devuelve la lectura de INFO ya formateada
         let d = MockDongle::new();
-        let mut t = BleTransport::open(d.connector(), Box::new(BleV1), BleOptions::default(), std::time::Duration::from_secs(2)).unwrap();
+        let mut t = BleTransport::open(d.connector(), Box::new(BleV1), BleOptions::default(), std::time::Duration::from_secs(20)).unwrap();
         let r = t.send("info", true).unwrap().unwrap();
         assert!(r.starts_with("proto=1 fw=0.1 mode=C caps=teclado,raton-rel,raton-abs"), "{r}");
     }

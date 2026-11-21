@@ -531,7 +531,7 @@ mod tests {
     fn wait_until(f: impl Fn() -> bool) {
         let t = Instant::now();
         while !f() {
-            assert!(t.elapsed() < Duration::from_secs(3), "timeout");
+            assert!(t.elapsed() < Duration::from_secs(20), "timeout");
             std::thread::sleep(Duration::from_millis(5));
         }
     }
@@ -555,9 +555,9 @@ mod tests {
     fn connects_polls_status_and_sends_in_order() {
         std::env::set_var("DKVM_ABS_BUTTONS", "abs"); // estas pruebas miden el camino absoluto original
         let (s, h) = mock_session();
-        let ev = s.events.recv_timeout(Duration::from_secs(2)).unwrap();
+        let ev = s.events.recv_timeout(Duration::from_secs(20)).unwrap();
         assert!(matches!(ev, Event::Link(LinkState::Connected { .. })));
-        let ev = s.events.recv_timeout(Duration::from_secs(2)).unwrap();
+        let ev = s.events.recv_timeout(Duration::from_secs(20)).unwrap();
         assert!(matches!(ev, Event::Status { host: true, hidready: true, .. }), "{ev:?}");
         s.send(Cmd::Key { usage: 0x04, down: true });
         s.send(Cmd::Key { usage: 0x04, down: false });
@@ -573,11 +573,11 @@ mod tests {
     fn mouse_moves_coalesce_and_keep_order_around_buttons() {
         std::env::set_var("DKVM_ABS_BUTTONS", "abs"); // estas pruebas miden el camino absoluto original
         let (s, h) = mock_session();
-        let _ = s.events.recv_timeout(Duration::from_secs(2));
-        // Determinista: se ocupa el hilo de sesión ~200 ms con una secuencia de teclas (cada pulsación mantiene 50 ms),
-        // y mientras tanto se encola toda la ráfaga; así el hilo la drena en UN lote sin depender del reloj del runner.
-        s.send(Cmd::Keys("a b c d".into()));
-        std::thread::sleep(Duration::from_millis(30));
+        let _ = s.events.recv_timeout(Duration::from_secs(20));
+        // Determinista: el hilo de sesión queda ocupado en una repetición (no drena la cola hasta que se cancela); se encola
+        // toda la ráfaga y SOLO entonces se cancela, así que se drena en un único lote sin depender de ningún reloj.
+        s.send(Cmd::Repeat { combo: "f2".into(), interval_ms: 20, secs: 120.0 });
+        wait_until(|| h.lock().sent.iter().any(|l| l.starts_with("kd")));
         for i in 0..100 {
             s.send(Cmd::MouseAbs { x: i, y: 2 * i });
         }
@@ -587,10 +587,15 @@ mod tests {
             let _ = i;
         }
         s.send(Cmd::Button { name: "left", down: false, rel: false });
-        wait_until(|| h.lock().sent.iter().filter(|l| l.starts_with("mba")).count() >= 3);
+        s.cancel_job();
+        wait_until(|| {
+            let st = h.lock();
+            st.sent.iter().position(|l| l == "mba 1").map(|d| st.sent[d..].iter().any(|l| l == "mba 0")).unwrap_or(false)
+        });
         let st = h.lock();
         let ma: Vec<_> = st.sent.iter().filter(|l| l.starts_with("ma ")).collect();
-        assert!(ma.len() < 100, "no se agrupó el movimiento absoluto: {}", ma.len());
+        // un lote: una sola orden `ma` antes del botón y una tras él (la última posición), nunca 100
+        assert!(ma.len() <= 4, "no se agrupó el movimiento absoluto: {}", ma.len());
         assert_eq!(st.abs_pos, (99, 198), "debe quedar la última posición");
         assert_eq!(st.rel_total, [50, -50], "no se pierde movimiento relativo");
         // el orden pulsar/soltar se conserva
@@ -638,7 +643,7 @@ mod tests {
         .unwrap();
         let mut seen = Vec::new();
         let t = Instant::now();
-        while t.elapsed() < Duration::from_secs(6) {
+        while t.elapsed() < Duration::from_secs(30) {
             if let Ok(e) = s.events.recv_timeout(Duration::from_millis(100)) {
                 let done = matches!(e, Event::Status { .. }) && seen.iter().filter(|x: &&String| x.starts_with('C')).count() >= 2;
                 seen.push(match &e {
@@ -659,7 +664,7 @@ mod tests {
     #[test]
     fn combo_and_type_use_target_layout() {
         let (s, h) = mock_session();
-        let _ = s.events.recv_timeout(Duration::from_secs(2));
+        let _ = s.events.recv_timeout(Duration::from_secs(20));
         s.send(Cmd::Combo("ctrl+alt+del".into()));
         wait_until(|| h.lock().sent.iter().any(|l| l == "ku 0xE0"));
         let st = h.lock();
@@ -693,7 +698,7 @@ mod tests {
         let mut got_status = false;
         let mut got_rtt = false;
         let t = Instant::now();
-        while t.elapsed() < Duration::from_secs(4) && !(got_link && got_status && got_rtt) {
+        while t.elapsed() < Duration::from_secs(30) && !(got_link && got_status && got_rtt) {
             match s.events.recv_timeout(Duration::from_millis(100)) {
                 Ok(Event::Link(LinkState::Connected { .. })) => got_link = true,
                 Ok(Event::Status { host: true, hidready: true, mode: Some(m), .. }) => {
@@ -718,7 +723,7 @@ mod tests {
         let t = Instant::now();
         let mut reconnecting = false;
         let mut back = false;
-        while t.elapsed() < Duration::from_secs(4) && !back {
+        while t.elapsed() < Duration::from_secs(30) && !back {
             match s.events.recv_timeout(Duration::from_millis(100)) {
                 Ok(Event::Link(LinkState::Reconnecting { .. })) => reconnecting = true,
                 Ok(Event::Link(LinkState::Connected { .. })) if reconnecting => back = true,
@@ -756,7 +761,7 @@ mod tests {
             SessionOpts { abs_buttons_via_rel: via_rel },
         )
         .unwrap();
-        std::thread::sleep(Duration::from_millis(300));
+        wait_link(&s);
         let parse = |link: &crate::transport::ble::mockble::MockDongle| -> Vec<(u8, Vec<u8>)> {
             link.writes().iter().flat_map(|w| split_records(w).0.into_iter().map(|(o, p)| (o, p.to_vec())).collect::<Vec<_>>()).collect()
         };
@@ -773,7 +778,7 @@ mod tests {
             }
             std::thread::sleep(Duration::from_millis(15));
         }
-        std::thread::sleep(Duration::from_millis(200));
+        wait_until(|| parse(&link).iter().filter(|(o, p)| *o == btn_op && p == &[0]).count() >= 30);
         let recs = parse(&link);
         let downs: Vec<usize> = recs.iter().enumerate().filter(|(_, (o, p))| *o == btn_op && p == &[1]).map(|(i, _)| i).collect();
         let ups: Vec<usize> = recs.iter().enumerate().filter(|(_, (o, p))| *o == btn_op && p == &[0]).map(|(i, _)| i).collect();
@@ -803,8 +808,19 @@ mod tests {
             SessionOpts { abs_buttons_via_rel: true },
         )
         .unwrap();
-        std::thread::sleep(Duration::from_millis(300));
+        wait_link(&s);
         (s, sim, link)
+    }
+
+    /// Espera (hasta 20 s) al evento de enlace conectado de la sesión.
+    fn wait_link(s: &Session) {
+        let t0 = Instant::now();
+        loop {
+            match s.events.recv_timeout(Duration::from_millis(50)) {
+                Ok(Event::Link(LinkState::Connected { .. })) => return,
+                _ => assert!(t0.elapsed() < Duration::from_secs(20), "la sesión no conectó"),
+            }
+        }
     }
 
     fn records(link: &crate::transport::ble::mockble::MockDongle) -> Vec<(u8, Vec<u8>)> {
@@ -868,7 +884,7 @@ mod tests {
     fn paste_can_be_cancelled_and_releases_everything() {
         let (s, sim, link) = sim_rig("us");
         s.send(Cmd::Paste(PasteJob { text: "x".repeat(2000), layout: "us".into(), per_key_ms: 10 }));
-        std::thread::sleep(Duration::from_millis(250));
+        wait_until(|| typed_usages(&link).len() >= 8);
         s.cancel_job();
         let (summary, error, cancelled) = wait_done(&s, 10);
         assert!(cancelled && error.is_none(), "{summary}");
@@ -883,7 +899,7 @@ mod tests {
     fn paste_retries_on_busy_error() {
         let (s, _sim, link) = sim_rig("us");
         s.send(Cmd::Paste(PasteJob { text: "abcdefghijklmnopqrstuvwxyz".into(), layout: "us".into(), per_key_ms: 20 }));
-        std::thread::sleep(Duration::from_millis(120));
+        wait_until(|| !typed_usages(&link).is_empty());
         link.notify(&crate::ble_v1::record(crate::ble_v1::ERR, &[crate::ble_v1::KEY_DOWN, 1])); // BUSY
         let (summary, error, cancelled) = wait_done(&s, 20);
         assert!(error.is_none() && !cancelled, "{summary} {error:?}");
@@ -899,8 +915,7 @@ mod tests {
     #[test]
     fn paste_aborts_on_non_busy_error() {
         let (s, sim, _link) = sim_rig("us");
-        sim.set_flags(0); // host no enumerado
-        std::thread::sleep(Duration::from_millis(100));
+        sim.set_flags(0); // host no enumerado (el simulado lo aplica ya a las siguientes órdenes)
         s.send(Cmd::Paste(PasteJob { text: "x".repeat(400), layout: "us".into(), per_key_ms: 5 }));
         let (_, error, _) = wait_done(&s, 20);
         assert!(error.is_some(), "debía abortar con error");
@@ -934,7 +949,7 @@ mod tests {
         let n = typed_usages(&link).iter().filter(|u| **u == 0x3B).count();
         assert!((8..=21).contains(&n), "{n} pulsaciones de F2 ({summary})");
         s.send(Cmd::Repeat { combo: "del".into(), interval_ms: 20, secs: 60.0 });
-        std::thread::sleep(Duration::from_millis(200));
+        wait_until(|| typed_usages(&link).iter().filter(|u| **u == 0x4C).count() >= 3);
         s.cancel_job();
         let (_, error, cancelled) = wait_done(&s, 10);
         assert!(cancelled && error.is_none());
@@ -946,7 +961,7 @@ mod tests {
         let (s, _sim, link) = sim_rig("us");
         s.send(Cmd::SetLayout("de".into()));
         s.send(Cmd::Type("z".into()));
-        std::thread::sleep(Duration::from_millis(200));
+        wait_until(|| !typed_usages(&link).is_empty());
         // en de la z está en la tecla Y de EE. UU. (0x1C)
         assert_eq!(typed_usages(&link), vec![0x1C]);
     }

@@ -41,7 +41,11 @@ pub fn ble_sim(opts: BleOptions) -> (BleTransport, Sim, MockDongle) {
     link.set_responder(move |w| s2.handle(w));
     // al suscribirse el dongle real envía STATE: lo imitamos al conectar
     let t = BleTransport::spawn(link.connector(), Box::new(BleV1::new()), opts);
-    std::thread::sleep(Duration::from_millis(30));
+    // se espera por CONDICIÓN (enlace conectado, hasta 20 s), no un sleep fijo: en un equipo cargado 30 ms no bastan
+    let t0 = std::time::Instant::now();
+    while !t.link_state().map(|s| s.is_connected()).unwrap_or(true) && t0.elapsed() < Duration::from_secs(20) {
+        std::thread::sleep(Duration::from_millis(2));
+    }
     l2.notify(&sim.state_evt());
     (t, sim, l2)
 }
