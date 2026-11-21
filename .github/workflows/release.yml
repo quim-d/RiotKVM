@@ -150,7 +150,7 @@ jobs:
           # macos-13 (Intel) fue retirado por GitHub; macos-15-intel es el último runner Intel disponible.
           - os: macos-15-intel
             arch: x86_64
-          - os: macos-14
+          - os: macos-15
             arch: arm64
     steps:
       - uses: actions/checkout@v4
