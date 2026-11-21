@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><title>QKVM — demo LCD</title>
+<style>
+:root{color-scheme:dark}
+body{margin:0;padding:24px 20px;background:#05080a;color:#9dffb0;font:14px/1.5 Consolas,monospace}
+h1{font-size:20px;margin:0 0 4px;color:#39ff6a}h2{font-size:15px;margin:28px 0 8px;color:#ffb000}
+p{margin:4px 0 10px;color:#7fbf8f;max-width:70ch}
+.row{display:flex;flex-wrap:wrap;gap:20px}
+figure{margin:0}figcaption{margin-top:6px;color:#00e5ff}
+img{image-rendering:pixelated;border:1px solid #1b3a24;background:#000;max-width:100%}
+.strip{margin-top:8px}
+</style></head><body>
+<h1>QKVM — demo de la pantalla</h1>
+<p>Previsualización renderizada en el PC (no es la pantalla real del dongle: colores, brillo y fuente pueden variar algo en el ST7735). Tamaño real 160x80, ampliado.</p>
+
+<h2>Animación de arranque (1,2 s) — elige una</h2>
+<div class="row">
+<figure><img src="splash_v1_glitch.gif" alt="V1"><figcaption>V1 · glitch</figcaption><img class="strip" src="splash_v1_glitch_strip.png" alt=""></figure>
+<figure><img src="splash_v2_bios.gif" alt="V2"><figcaption>V2 · BIOS (recomendada)</figcaption><img class="strip" src="splash_v2_bios_strip.png" alt=""></figure>
+<figure><img src="splash_v3_apertura.gif" alt="V3"><figcaption>V3 · apertura</figcaption><img class="strip" src="splash_v3_apertura_strip.png" alt=""></figure>
+</div>
+
+<h2>Pantalla por modo</h2>
+<div class="row">
+<figure><img src="mode_A_cargo.png" alt="A"><figcaption>A · CARGO (ámbar) — solo almacenamiento</figcaption></figure>
+<figure><img src="mode_B_boarding.png" alt="B"><figcaption>B · BOARDING (cian) — teclado + ratón</figcaption></figure>
+<figure><img src="mode_C_full.png" alt="C"><figcaption>C · FULL (verde) — todo</figcaption></figure>
+</div>
+</body></html>

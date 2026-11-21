@@ -1,0 +1,221 @@
+name: release
+
+# Se dispara al empujar una etiqueta vX.Y.Z (crea la release) y a mano (workflow_dispatch: solo compila y sube artefactos,
+# sin release). La versión sale de client/Cargo.toml; si la etiqueta no coincide, falla pronto.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: "0"
+
+defaults:
+  run:
+    shell: bash
+    working-directory: client
+
+jobs:
+  linux:
+    name: Linux x86_64 (tar.gz, .deb, .rpm)
+    runs-on: ubuntu-22.04 # glibc 2.35: los binarios sirven en Ubuntu 22.04+, Debian 12+, Fedora y Arch actuales
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Dependencias del sistema
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends pkg-config libdbus-1-dev nasm cmake \
+            libxkbcommon-dev libwayland-dev libx11-dev libxcb1-dev libclang-dev
+
+      - name: Rust estable
+        run: rustup toolchain install stable --profile minimal --no-self-update && rustup default stable
+
+      - name: Versión
+        id: ver
+        run: |
+          V=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
+          if [ "$GITHUB_REF_TYPE" = "tag" ] && [ "$GITHUB_REF_NAME" != "v$V" ]; then
+            echo "::error::la etiqueta $GITHUB_REF_NAME no coincide con la versión de client/Cargo.toml (v$V)"; exit 1
+          fi
+          [ "$GITHUB_REF_TYPE" = "tag" ] || V="$V-dev"
+          echo "v=$V" >> "$GITHUB_OUTPUT"
+
+      - name: Compilar
+        run: cargo build --release --locked
+
+      - name: Pruebas (sin hardware)
+        run: cargo test --release --locked -p dkvm-core -p dkvm-cli
+
+      - name: Autocompletado de shell
+        run: |
+          mkdir -p target/completions
+          target/release/dkvm completion bash > target/completions/dkvm.bash
+          target/release/dkvm completion zsh  > target/completions/_dkvm
+          target/release/dkvm completion fish > target/completions/dkvm.fish
+
+      - name: tar.gz genérico
+        run: |
+          V=${{ steps.ver.outputs.v }}
+          D="quim-dkvm-$V-linux-x86_64"
+          mkdir -p "../dist/$D"
+          cp target/release/dkvm target/release/dkvm-gui "../dist/$D/"
+          cp -r target/completions "../dist/$D/completions"
+          cp ../packaging/linux/dkvm-gui.desktop README.md "../dist/$D/"
+          [ -f ../LICENSE ] && cp ../LICENSE "../dist/$D/" || true
+          tar -C ../dist -czf "../dist/$D.tar.gz" "$D"
+          rm -rf "../dist/$D"
+
+      - name: .deb (cargo-deb)
+        run: |
+          cargo install cargo-deb --locked
+          cargo deb -p dkvm-gui --no-build -o "../dist/quim-dkvm_${{ steps.ver.outputs.v }}_amd64.deb"
+
+      - name: .rpm (cargo-generate-rpm)
+        run: |
+          cargo install cargo-generate-rpm --locked
+          cargo generate-rpm -p dkvm-gui -o "../dist/quim-dkvm-${{ steps.ver.outputs.v }}-1.x86_64.rpm"
+
+      - name: Comprobar paquetes
+        run: |
+          ls -l ../dist
+          dpkg-deb --info ../dist/*.deb | head -20
+          dpkg-deb --contents ../dist/*.deb
+          rpm -qpl ../dist/*.rpm || true
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-x86_64
+          path: dist/*
+          if-no-files-found: error
+
+  windows:
+    name: Windows x86_64 (zip)
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Rust estable
+        run: rustup toolchain install stable --profile minimal --no-self-update && rustup default stable
+
+      - name: Versión
+        id: ver
+        run: |
+          V=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
+          if [ "$GITHUB_REF_TYPE" = "tag" ] && [ "$GITHUB_REF_NAME" != "v$V" ]; then
+            echo "::error::la etiqueta $GITHUB_REF_NAME no coincide con la versión de client/Cargo.toml (v$V)"; exit 1
+          fi
+          [ "$GITHUB_REF_TYPE" = "tag" ] || V="$V-dev"
+          echo "v=$V" >> "$GITHUB_OUTPUT"
+
+      - name: Compilar
+        run: cargo build --release --locked
+
+      - name: Pruebas (incluye el hook de teclado con eventos sintéticos)
+        run: cargo test --release --locked
+
+      - name: zip
+        shell: pwsh
+        run: |
+          $V = "${{ steps.ver.outputs.v }}"
+          $D = "quim-dkvm-$V-windows-x86_64"
+          New-Item -ItemType Directory -Force "../dist/$D" | Out-Null
+          Copy-Item target/release/dkvm.exe, target/release/dkvm-gui.exe, target/release/vidbench.exe "../dist/$D/"
+          Copy-Item README.md "../dist/$D/README.md"
+          if (Test-Path ../LICENSE) { Copy-Item ../LICENSE "../dist/$D/LICENSE" }
+          Compress-Archive -Path "../dist/$D" -DestinationPath "../dist/$D.zip"
+          Remove-Item -Recurse -Force "../dist/$D"
+          Get-ChildItem ../dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-x86_64
+          path: dist/*
+          if-no-files-found: error
+
+  macos:
+    name: macOS ${{ matrix.arch }} (.dmg + CLI)
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # macos-13 (Intel) fue retirado por GitHub; macos-15-intel es el último runner Intel disponible.
+          - os: macos-15-intel
+            arch: x86_64
+          - os: macos-14
+            arch: arm64
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Dependencias
+        run: brew install nasm cmake pkg-config
+
+      - name: Rust estable
+        run: rustup toolchain install stable --profile minimal --no-self-update && rustup default stable
+
+      - name: Versión
+        id: ver
+        run: |
+          V=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
+          if [ "$GITHUB_REF_TYPE" = "tag" ] && [ "$GITHUB_REF_NAME" != "v$V" ]; then
+            echo "::error::la etiqueta $GITHUB_REF_NAME no coincide con la versión de client/Cargo.toml (v$V)"; exit 1
+          fi
+          [ "$GITHUB_REF_TYPE" = "tag" ] || V="$V-dev"
+          echo "v=$V" >> "$GITHUB_OUTPUT"
+
+      - name: Compilar
+        run: cargo build --release --locked
+
+      - name: Pruebas (sin hardware)
+        run: cargo test --release --locked -p dkvm-core -p dkvm-cli
+
+      - name: .app (firma ad-hoc) + .dmg + CLI
+        working-directory: .
+        run: |
+          chmod +x packaging/macos/make-dmg.sh
+          packaging/macos/make-dmg.sh "${{ steps.ver.outputs.v }}" "${{ matrix.arch }}" client/target/release "$GITHUB_WORKSPACE/dist"
+          ls -l dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-${{ matrix.arch }}
+          path: dist/*
+          if-no-files-found: error
+
+  release:
+    name: Crear release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [linux, windows, macos]
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write # solo este job puede crear la release
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: SHA256
+        working-directory: dist
+        run: |
+          ls -l
+          sha256sum -- * > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: Release
+        working-directory: dist
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PRE=""
+          case "$GITHUB_REF_NAME" in *-*) PRE="--prerelease";; esac
+          gh release create "$GITHUB_REF_NAME" ./* --repo "$GITHUB_REPOSITORY" \
+            --title "quim-dkvm $GITHUB_REF_NAME" --generate-notes --verify-tag $PRE

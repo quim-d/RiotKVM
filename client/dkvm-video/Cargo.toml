@@ -1,0 +1,24 @@
+[package]
+name = "dkvm-video"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Vídeo del KVM: captura UVC (nokhwa / ffmpeg) con búfer mínimo, patrón de prueba y banco de latencia"
+
+[features]
+default = ["nokhwa-backend"]
+# Media Foundation (Windows), V4L2 (Linux), AVFoundation (macOS) a través de nokhwa.
+nokhwa-backend = ["dep:nokhwa"]
+
+[dependencies]
+dkvm-core = { path = "../dkvm-core", features = ["ble"] }
+mozjpeg = "0.10"
+serde_json.workspace = true
+image = { version = "0.25", default-features = false, features = ["png"] }
+[dependencies.nokhwa]
+version = "0.10"
+optional = true
+features = ["input-native"]
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_Threading"] }

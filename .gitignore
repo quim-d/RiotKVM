@@ -1,0 +1,22 @@
+# compilación y entorno
+.pio/
+.vscode/
+__pycache__/
+*.pyc
+
+# estado local del equipo de trabajo
+.device.lock
+.claude/
+tests/
+docs/handoff/
+docs/fw/
+docs/review-fase3.md
+docs/TEAM.md
+docs/PLAN-latencia.md
+
+# cliente: solo fuentes (sin compilados ni binarios)
+client/target/
+client/dist/
+
+# artefactos de empaquetado locales
+/dist/

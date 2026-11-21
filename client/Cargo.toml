@@ -1,0 +1,22 @@
+[workspace]
+resolver = "2"
+members = ["dkvm-core", "dkvm-cli", "dkvm-video", "dkvm-gui"]
+# dkvm-gui se añadirá cuando 1-4 estén verdes (egui/eframe)
+
+[workspace.package]
+version = "0.2.0"
+edition = "2021"
+license = "MIT"
+
+[workspace.dependencies]
+serde_json = { version = "1", features = ["preserve_order"] }
+serde = { version = "1", features = ["derive"] }
+unicode-normalization = "0.1"
+serialport = { version = "4", default-features = false }
+clap = { version = "4", features = ["derive", "env"] }
+clap_complete = "4"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+opt-level = 3
