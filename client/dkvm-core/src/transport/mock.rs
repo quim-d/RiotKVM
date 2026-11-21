@@ -51,7 +51,7 @@ pub struct MockHandle(Arc<Mutex<MockState>>);
 
 impl MockHandle {
     pub fn lock(&self) -> MutexGuard<'_, MockState> {
-        self.0.lock().unwrap()
+        self.0.lock().unwrap_or_else(|e| e.into_inner()) // un pánico en otro hilo no debe envenenar el mock
     }
 }
 
@@ -203,7 +203,7 @@ impl Transport for MockTransport {
             std::thread::sleep(self.latency);
         }
         let reply = {
-            let mut st = self.state.lock().unwrap();
+            let mut st = self.state.lock().unwrap_or_else(|e| e.into_inner());
             st.sent.push(line.to_string());
             Self::handle_line(&mut st, line)
         };

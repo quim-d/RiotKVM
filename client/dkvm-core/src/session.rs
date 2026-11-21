@@ -574,7 +574,10 @@ mod tests {
         std::env::set_var("DKVM_ABS_BUTTONS", "abs"); // estas pruebas miden el camino absoluto original
         let (s, h) = mock_session();
         let _ = s.events.recv_timeout(Duration::from_secs(2));
-        // frena el hilo de sesión con un Combo lento no hace falta: se envía todo de golpe
+        // Determinista: se ocupa el hilo de sesión ~200 ms con una secuencia de teclas (cada pulsación mantiene 50 ms),
+        // y mientras tanto se encola toda la ráfaga; así el hilo la drena en UN lote sin depender del reloj del runner.
+        s.send(Cmd::Keys("a b c d".into()));
+        std::thread::sleep(Duration::from_millis(30));
         for i in 0..100 {
             s.send(Cmd::MouseAbs { x: i, y: 2 * i });
         }
