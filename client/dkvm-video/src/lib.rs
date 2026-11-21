@@ -7,6 +7,9 @@
 
 pub mod ffmpeg;
 #[cfg(feature = "nokhwa-backend")]
+#[cfg(target_os = "linux")]
+pub mod linux;
+pub mod pick;
 pub mod native;
 pub mod pattern;
 pub mod stats;
@@ -113,6 +116,10 @@ pub struct DeviceInfo {
     pub backend: Backend,
     pub index: usize,
     pub name: String,
+    /// Nodo del sistema (Linux: `/dev/video4`); vacío si no aplica.
+    pub node: String,
+    /// Capacidades legibles (Linux: `VIDEO_CAPTURE|STREAMING`); vacío si no aplica.
+    pub caps: String,
     /// Cámara virtual (OBS, móvil como webcam...): nunca se elige sola.
     pub virtual_cam: bool,
     pub capture_card: bool,
@@ -210,7 +217,7 @@ pub fn pick_mode(want: (u32, u32, u32), avail: &[(u32, u32, u32)]) -> Option<(u3
     }
     let score = |m: &(u32, u32, u32)| -> i64 {
         let area = (m.0 as i64 * m.1 as i64 - want.0 as i64 * want.1 as i64).abs() / 1000;
-        let fps = (m.2 as i64 - want.2 as i64).abs() * 500;
+        let fps = (m.2 as i64 - want.2 as i64).abs() * 50; // 10 fps de diferencia ~ 0,5 Mpx: se prefiere conservar la resolución pedida
         // de los parecidos, un pequeño sesgo hacia 720p60 (baja latencia)
         let pref = if (m.0, m.1, m.2) == (1280, 720, 60) { -1 } else { 0 };
         area + fps + pref
@@ -239,6 +246,80 @@ pub fn resolve(src: &Source) -> (Source, String) {
     }
 }
 
+/// Intentos de apertura seguidos antes de dejar de reintentar (cada 2 s) y mostrar el último error.
+pub const MAX_OPEN_ATTEMPTS: u32 = 5;
+
+/// Texto de diagnóstico (para pegar en un informe): nodos, capacidades y modos de cada dispositivo de vídeo.
+pub fn diagnostic_report() -> String {
+    #[cfg(all(feature = "nokhwa-backend", target_os = "linux"))]
+    {
+        let mut s = String::from("Dispositivos de vídeo (V4L2)\n");
+        for n in linux::nodes() {
+            let cap = pick::is_capture_node(&n);
+            s.push_str(&format!(
+                "{}  card=\"{}\" driver={} bus={} usb={} caps=[{}]  captura={}\n",
+                n.path,
+                n.card,
+                n.driver,
+                n.bus,
+                n.usb.map(|(v, p)| format!("{v:04x}:{p:04x}")).unwrap_or_else(|| "-".into()),
+                pick::caps_text(n.caps),
+                match (&n.open_err, cap) {
+                    (Some(e), _) => format!("NO ({e})"),
+                    (None, true) => "sí".to_string(),
+                    (None, false) => "no (nodo de metadatos u otra función)".to_string(),
+                }
+            ));
+            if cap {
+                match linux::offers(n.index) {
+                    Ok(offers) => {
+                        let mut fmts: Vec<String> = Vec::new();
+                        for o in &offers {
+                            if !fmts.contains(&o.fourcc) {
+                                fmts.push(o.fourcc.clone());
+                            }
+                        }
+                        for f in fmts {
+                            let mut sizes: Vec<(u32, u32)> = Vec::new();
+                            for o in offers.iter().filter(|o| o.fourcc == f) {
+                                if !sizes.contains(&(o.w, o.h)) {
+                                    sizes.push((o.w, o.h));
+                                }
+                            }
+                            let parts: Vec<String> = sizes
+                                .iter()
+                                .map(|(w, h)| {
+                                    let fps: Vec<String> = offers.iter().filter(|o| o.fourcc == f && o.w == *w && o.h == *h).map(|o| o.fps.to_string()).collect();
+                                    format!("{w}x{h}@{}", fps.join("/"))
+                                })
+                                .collect();
+                            s.push_str(&format!("    {f}: {}\n", parts.join("  ")));
+                        }
+                    }
+                    Err(e) => s.push_str(&format!("    (no se pudieron leer los modos: {e})\n")),
+                }
+            }
+        }
+        s
+    }
+    #[cfg(all(feature = "nokhwa-backend", not(target_os = "linux")))]
+    {
+        let mut s = String::from("Dispositivos de vídeo (nokhwa)\n");
+        for d in list_devices() {
+            s.push_str(&format!("#{}  {}{}{}\n", d.index, d.name, if d.virtual_cam { " [virtual]" } else { "" }, if d.capture_card { " [capturadora]" } else { "" }));
+            match native::formats(d.index) {
+                Ok(v) => v.iter().for_each(|l| s.push_str(&format!("    {l}\n"))),
+                Err(e) => s.push_str(&format!("    (no se pudieron leer los modos: {e})\n")),
+            }
+        }
+        s
+    }
+    #[cfg(not(feature = "nokhwa-backend"))]
+    {
+        "compilado sin backend nativo".to_string()
+    }
+}
+
 /// Arranca la fuente en un hilo; los cuadros llegan a `latest`.
 pub fn start(src: &Source, mode: &Mode, latest: Arc<Latest>) -> std::thread::JoinHandle<()> {
     let (src, mode) = (src.clone(), mode.clone());
@@ -248,6 +329,7 @@ pub fn start(src: &Source, mode: &Mode, latest: Arc<Latest>) -> std::thread::Joi
         .spawn(move || {
             // Si la capturadora se reenchufa o falla al abrir (Media Foundation tarda unos segundos en
             // volver a ofrecerla tras reenumerar), se reintenta cada 2 s hasta que `stop()`.
+            let mut fails = 0u32;
             while !latest.stopped() {
                 let r = match &src {
                     Source::Auto => {
@@ -279,10 +361,13 @@ pub fn start(src: &Source, mode: &Mode, latest: Arc<Latest>) -> std::thread::Joi
                     Ok(()) if matches!(src, Source::Auto) && !latest.stopped() => {}
                     Ok(()) => break,
                     Err(e) => {
-                        latest.set_error(format!("{e} (reintentando)"));
-                        if !retry {
+                        fails += 1;
+                        if !retry || fails >= MAX_OPEN_ATTEMPTS {
+                            // sin bucle silencioso: se deja el último error a la vista y se para
+                            latest.set_error(format!("{e}\n(se detienen los reintentos tras {fails} intentos: cambia de fuente o pulsa Actualizar)"));
                             break;
                         }
+                        latest.set_error(format!("{e}\n(reintentando, intento {fails}/{MAX_OPEN_ATTEMPTS})"));
                         std::thread::sleep(Duration::from_secs(2));
                     }
                 }
@@ -300,7 +385,7 @@ mod source_tests {
 
     fn dev(i: usize, name: &str) -> DeviceInfo {
         let (virtual_cam, capture_card) = classify(name);
-        DeviceInfo { backend: Backend::Native, index: i, name: name.into(), virtual_cam, capture_card }
+        DeviceInfo { backend: Backend::Native, index: i, name: name.into(), node: String::new(), caps: String::new(), virtual_cam, capture_card }
     }
 
     fn rig() -> Vec<DeviceInfo> {

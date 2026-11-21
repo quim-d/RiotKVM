@@ -1101,7 +1101,7 @@ dependencies = [
 
 [[package]]
 name = "dkvm-cli"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "clap",
  "clap_complete",
@@ -1111,7 +1111,7 @@ dependencies = [
 
 [[package]]
 name = "dkvm-core"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "btleplug",
  "futures",
@@ -1126,7 +1126,7 @@ dependencies = [
 
 [[package]]
 name = "dkvm-gui"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "bytemuck",
  "clap",
@@ -1140,13 +1140,14 @@ dependencies = [
 
 [[package]]
 name = "dkvm-video"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "dkvm-core",
  "image",
  "mozjpeg",
  "nokhwa",
  "serde_json",
+ "v4l",
  "windows-sys 0.61.2",
 ]
 

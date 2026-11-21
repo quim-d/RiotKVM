@@ -889,7 +889,7 @@ impl eframe::App for App {
                         pick_src = Some("auto".into());
                     }
                     for d in &self.devices {
-                        let l = format!("{}{}{}", d.name, if d.capture_card { " (capturadora)" } else { "" }, if d.virtual_cam { " (virtual)" } else { "" });
+                        let l = format!("{}{}{}{}", d.name, if d.node.is_empty() { String::new() } else { format!(" [{}]", d.node) }, if d.capture_card { " (capturadora)" } else { "" }, if d.virtual_cam { " (virtual)" } else { "" });
                         if ui.selectable_label(self.src_pref.eq_ignore_ascii_case(&d.name), l).clicked() {
                             pick_src = Some(d.name.clone());
                         }
@@ -897,8 +897,12 @@ impl eframe::App for App {
                     if ui.selectable_label(self.src_pref == "none", "Ninguna (sin vídeo)").clicked() {
                         pick_src = Some("none".into());
                     }
-                    if ui.small_button("Actualizar lista").on_hover_text("Buscar cámaras y capturadoras (no enciende ninguna)").clicked() {
+                    if ui.small_button("Actualizar lista").on_hover_text("Buscar cámaras y capturadoras (no enciende ninguna); si se detuvieron los reintentos, vuelve a abrir la fuente").clicked() {
                         self.refresh_devices();
+                        if self.video.latest.error().map(|e| e.contains("se detienen los reintentos")).unwrap_or(false) {
+                            let p = if self.src_pref.is_empty() { "auto".to_string() } else { self.src_pref.clone() };
+                            self.select_source(&p);
+                        }
                     }
                     ui.separator();
                     ui.label(egui::RichText::new("resolución / fps").color(theme::GRIS));

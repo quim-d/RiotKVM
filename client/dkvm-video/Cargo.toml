@@ -20,5 +20,9 @@ version = "0.10"
 optional = true
 features = ["input-native"]
 
+[target.'cfg(target_os = "linux")'.dependencies]
+# la misma versión/feature que usa nokhwa (no añade nada nuevo al árbol); enumeración V4L2 directa
+v4l = { version = "0.14", features = ["v4l2-sys"] }
+
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_Threading"] }

@@ -41,6 +41,7 @@ fn main() {
     let secs: f64 = arg(&args, "--secs").and_then(|s| s.parse().ok()).unwrap_or(8.0);
     match cmd {
         "list" => {
+            print!("{}", dkvm_video::diagnostic_report());
             for d in dkvm_video::list_devices() {
                 println!("nativo #{}: {} {}{}", d.index, d.name, if d.virtual_cam { "[virtual] " } else { "" }, if d.capture_card { "[capturadora]" } else { "" });
             }

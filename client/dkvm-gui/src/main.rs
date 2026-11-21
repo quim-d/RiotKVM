@@ -75,6 +75,9 @@ struct Args {
     /// Diagnóstico del hook de teclado: lo instala N segundos SIN abrir ventana y cuenta las teclas que ve (escribe en cualquier sitio)
     #[arg(long, value_name = "SEGUNDOS")]
     hook_test: Option<u64>,
+    /// Imprime los dispositivos de vídeo (nodo, nombre, capacidades y modos) y sale: para pegar en un informe de fallo
+    #[arg(long)]
+    video_list: bool,
     /// (pruebas) cierra tras N segundos
     #[arg(long)]
     exit_after: Option<f64>,
@@ -82,6 +85,10 @@ struct Args {
 
 fn main() -> eframe::Result {
     let a = Args::parse();
+    if a.video_list {
+        print!("{}", dkvm_video::diagnostic_report());
+        return Ok(());
+    }
     if std::env::var_os("DKVM_ALLOW_MULTI").is_none() && !single_instance() {
         eprintln!("dkvm-gui: ya hay otra ventana de dkvm-gui abierta (comparten capturadora y enlace BLE: un segundo cliente desplaza al primero). Ciérrala primero.");
         std::process::exit(2);

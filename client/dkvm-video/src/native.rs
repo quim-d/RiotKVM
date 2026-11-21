@@ -1,23 +1,35 @@
 //! Backend nativo con `nokhwa` (Media Foundation en Windows, V4L2 en Linux, AVFoundation en macOS).
 
-use crate::{Backend, DeviceInfo, Frame, Latest, Mode};
+#[cfg(not(target_os = "linux"))]
+use crate::Backend;
+use crate::{DeviceInfo, Frame, Latest, Mode};
 use nokhwa::pixel_format::RgbAFormat;
-use nokhwa::utils::{ApiBackend, CameraFormat, CameraIndex, FrameFormat, RequestedFormat, RequestedFormatType, Resolution};
+#[cfg(not(target_os = "linux"))]
+use nokhwa::utils::ApiBackend;
+use nokhwa::utils::{CameraFormat, CameraIndex, FrameFormat, RequestedFormat, RequestedFormatType, Resolution};
 use nokhwa::Camera;
 use std::time::{Duration, Instant};
 
 pub fn list() -> Vec<DeviceInfo> {
     nokhwa::nokhwa_initialize(|_| {});
-    let Ok(cams) = nokhwa::query(ApiBackend::Auto) else { return vec![] };
-    cams.iter()
-        .enumerate()
-        .map(|(i, c)| {
-            let name = c.human_name();
-            let (virtual_cam, capture_card) = crate::classify(&name);
-            let index = c.index().as_index().map(|v| v as usize).unwrap_or(i);
-            DeviceInfo { backend: Backend::Native, index, name, virtual_cam, capture_card }
-        })
-        .collect()
+    // Linux: solo nodos con capacidad de captura (los de metadatos de un mismo dispositivo UVC no sirven)
+    #[cfg(target_os = "linux")]
+    {
+        return crate::pick::devices_from_nodes(&crate::linux::nodes());
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        let Ok(cams) = nokhwa::query(ApiBackend::Auto) else { return vec![] };
+        cams.iter()
+            .enumerate()
+            .map(|(i, c)| {
+                let name = c.human_name();
+                let (virtual_cam, capture_card) = crate::classify(&name);
+                let index = c.index().as_index().map(|v| v as usize).unwrap_or(i);
+                DeviceInfo { backend: Backend::Native, index, name, node: String::new(), caps: String::new(), virtual_cam, capture_card }
+            })
+            .collect()
+    }
 }
 
 pub fn frame_format(mode: &Mode) -> FrameFormat {
@@ -65,10 +77,7 @@ pub fn run(name: Option<&str>, index: Option<usize>, mode: &Mode, latest: &Lates
         (None, Some(i)) => i,
         (None, None) => list().into_iter().find(|d| d.capture_card).or_else(|| list().into_iter().find(|d| !d.virtual_cam)).ok_or("no hay cámara")?.index,
     };
-    let want = CameraFormat::new(Resolution::new(mode.w, mode.h), frame_format(mode), mode.fps);
-    let req = RequestedFormat::new::<RgbAFormat>(RequestedFormatType::Closest(want));
-    let mut cam = Camera::new(CameraIndex::Index(idx as u32), req).map_err(|e| format!("abrir cámara {idx}: {e}"))?;
-    cam.open_stream().map_err(|e| format!("iniciar captura: {e}"))?;
+    let mut cam = open_camera(idx, mode)?;
     let f = cam.camera_format();
     latest.set_info(format!("nokhwa {:?} {}x{}@{}", f.format(), f.width(), f.height(), f.frame_rate()));
     let mut seq = 0u64;
@@ -127,6 +136,75 @@ pub fn run(name: Option<&str>, index: Option<usize>, mode: &Mode, latest: &Lates
     Ok(())
 }
 
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+fn frame_format_of(fourcc: &str) -> Option<FrameFormat> {
+    match fourcc.to_ascii_uppercase().as_str() {
+        "MJPG" | "MJPEG" | "JPEG" => Some(FrameFormat::MJPEG),
+        "YUYV" | "YUY2" => Some(FrameFormat::YUYV),
+        "NV12" => Some(FrameFormat::NV12),
+        _ => None,
+    }
+}
+
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+enum Att {
+    Exact(CameraFormat),
+    Closest(CameraFormat),
+    Default,
+}
+
+/// Abre el dispositivo probando una cascada de formatos (ver `pick::plan_attempts`); si todo falla, el error dice qué se probó.
+fn open_camera(idx: usize, mode: &Mode) -> Result<Camera, String> {
+    let want = (mode.w, mode.h, mode.fps);
+    let dev = list().into_iter().find(|d| d.index == idx);
+    let label = match &dev {
+        Some(d) if !d.node.is_empty() => format!("{} [{}]", d.name, d.node),
+        Some(d) => d.name.clone(),
+        None => format!("cámara #{idx}"),
+    };
+    #[cfg(target_os = "linux")]
+    if dev.is_none() {
+        return Err(format!("el nodo /dev/video{idx} no es un nodo de captura (metadatos u otra función) o no se puede abrir: elige otra fuente (`dkvm-gui --video-list` muestra los nodos)"));
+    }
+    let cf = |ff: FrameFormat, w: u32, h: u32, f: u32| CameraFormat::new(Resolution::new(w, h), ff, f);
+    let mut attempts: Vec<(String, Att)> = Vec::new();
+    #[cfg(target_os = "linux")]
+    match crate::linux::offers(idx) {
+        Ok(offers) => {
+            for a in crate::pick::plan_attempts(want, &offers) {
+                match a.fourcc.as_deref().and_then(frame_format_of) {
+                    Some(ff) => attempts.push((a.label(), Att::Exact(cf(ff, a.w, a.h, a.fps)))),
+                    None if a.fourcc.is_none() => attempts.push((a.label(), Att::Default)),
+                    None => {}
+                }
+            }
+        }
+        Err(e) => attempts.push((format!("lectura de modos: {e}"), Att::Default)),
+    }
+    if attempts.is_empty() {
+        for (n, ff) in [("MJPEG", FrameFormat::MJPEG), ("YUYV", FrameFormat::YUYV), ("NV12", FrameFormat::NV12)] {
+            attempts.push((format!("{n} más cercano a {}x{}@{}", want.0, want.1, want.2), Att::Closest(cf(ff, want.0, want.1, want.2))));
+        }
+        attempts.push(("formato por defecto del dispositivo".into(), Att::Default));
+    }
+    let mut tried: Vec<(String, String)> = Vec::new();
+    for (name, att) in attempts {
+        let req = match att {
+            Att::Exact(c) => RequestedFormat::new::<RgbAFormat>(RequestedFormatType::Exact(c)),
+            Att::Closest(c) => RequestedFormat::new::<RgbAFormat>(RequestedFormatType::Closest(c)),
+            Att::Default => RequestedFormat::new::<RgbAFormat>(RequestedFormatType::None),
+        };
+        match Camera::new(CameraIndex::Index(idx as u32), req) {
+            Ok(mut cam) => match cam.open_stream() {
+                Ok(()) => return Ok(cam),
+                Err(e) => tried.push((name, format!("iniciar captura: {e}"))),
+            },
+            Err(e) => tried.push((name, e.to_string())),
+        }
+    }
+    Err(crate::pick::describe_failure(&label, &tried))
+}
+
 /// MJPEG -> RGBA directo con libjpeg-turbo (mozjpeg): sin pasar por RGB888 ni la conversión de nokhwa.
 /// `fast`: DCT rápida y sin "fancy upsampling" (algo de color en los bordes a cambio de ~15-20 % de CPU).
 pub fn decode_mjpeg(data: &[u8], fast: bool) -> Result<(Vec<u8>, u32, u32), String> {
@@ -147,6 +225,15 @@ pub fn decode_mjpeg(data: &[u8], fast: bool) -> Result<(Vec<u8>, u32, u32), Stri
 /// Modos MJPEG (ancho, alto, fps) que ofrece el dispositivo. Abre el dispositivo SIN iniciar la captura (no enciende el
 /// piloto de una webcam); solo se llama para la fuente elegida, nunca al enumerar.
 pub fn modes(index: usize) -> Vec<(u32, u32, u32)> {
+    #[cfg(target_os = "linux")]
+    {
+        let mut out: Vec<(u32, u32, u32)> = crate::linux::offers(index).unwrap_or_default().into_iter().filter(|o| o.fourcc.eq_ignore_ascii_case("MJPG")).map(|o| (o.w, o.h, o.fps)).filter(|m| m.2 >= 5).collect();
+        out.sort_by_key(|m| std::cmp::Reverse((m.0 * m.1, m.2)));
+        out.dedup();
+        return out;
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
     nokhwa::nokhwa_initialize(|_| {});
     let req = RequestedFormat::new::<RgbAFormat>(RequestedFormatType::None);
     let Ok(mut cam) = Camera::new(CameraIndex::Index(index as u32), req) else { return vec![] };
@@ -169,4 +256,5 @@ pub fn modes(index: usize) -> Vec<(u32, u32, u32)> {
     out.sort_by_key(|m| std::cmp::Reverse((m.0 * m.1, m.2)));
     out.dedup();
     out
+    }
 }

@@ -51,7 +51,7 @@ pub fn list() -> Vec<crate::DeviceInfo> {
             if let Some(b) = line[a + 1..].find('"') {
                 let name = line[a + 1..a + 1 + b].to_string();
                 let (virtual_cam, capture_card) = crate::classify(&name);
-                v.push(crate::DeviceInfo { backend: crate::Backend::Ffmpeg, index: v.len(), name, virtual_cam, capture_card });
+                v.push(crate::DeviceInfo { backend: crate::Backend::Ffmpeg, index: v.len(), name, node: String::new(), caps: String::new(), virtual_cam, capture_card });
             }
         }
     }
