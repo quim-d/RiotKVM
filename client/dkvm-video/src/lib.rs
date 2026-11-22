@@ -9,6 +9,7 @@ pub mod ffmpeg;
 #[cfg(feature = "nokhwa-backend")]
 #[cfg(target_os = "linux")]
 pub mod linux;
+pub mod macsel;
 pub mod pick;
 pub mod native;
 pub mod pattern;

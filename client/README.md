@@ -296,3 +296,6 @@ En Linux cada dispositivo UVC expone varios nodos `/dev/videoN` y solo algunos c
 
 ## 3k. v0.2.2: vídeo a prueba de fallos en macOS
 QKVM se caía al arrancar en macOS: nokhwa abría la cámara para listar modos, fijaba un formato y AVFoundation lanzaba una NSException (convertida en pánico de Rust). Ahora: los modos/formatos se leen en solo lectura (`AVCaptureDevice.formats`, sin abrir la cámara); todas las llamadas al backend de vídeo (`dkvm-video/src/native.rs`, `guard`) aíslan los pánicos y devuelven un error que la GUI muestra, arrancando sin vídeo; cada intento de abrir un formato está aislado y la cascada continúa con el siguiente. Pendiente de comprobar en un Mac real (ver `docs/handoff/gui-dev.md`).
+
+## 3l. v0.2.3: captura propia en macOS (MS2109)
+En macOS el vídeo ya no pasa por `Camera` de nokhwa (`dkvm-video/src/mac.rs`): se elige (formato, rango de fps) por cercanía a lo pedido (`macsel.rs`: 30 -> 30.00003, 60 -> 60.00024), se aplica la duración exacta del propio rango, no se pide MJPEG (la MS2109 solo da NV12/YUYV en AVFoundation) y la salida se pide en BGRA. Si un formato falla se prueba el siguiente; todo error es un mensaje. Sin verificar en Mac real (ver `docs/handoff/gui-dev.md`).

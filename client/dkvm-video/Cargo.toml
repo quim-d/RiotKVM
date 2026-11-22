@@ -27,6 +27,9 @@ v4l = { version = "0.14", features = ["v4l2-sys"] }
 [target.'cfg(target_os = "macos")'.dependencies]
 # la misma versión que usa nokhwa; lectura de AVCaptureDevice.formats sin abrir la cámara
 nokhwa-bindings-macos = "0.2.4"
+# captura AVFoundation propia (src/mac.rs); mismas versiones que ya usa nokhwa-bindings-macos
+objc = { version = "0.2", features = ["exception"] }
+flume = "0.11"
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_Threading"] }

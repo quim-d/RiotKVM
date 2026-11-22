@@ -10,6 +10,10 @@ use nokhwa::utils::{CameraFormat, CameraIndex, FrameFormat, RequestedFormat, Req
 use nokhwa::Camera;
 use std::time::{Duration, Instant};
 
+#[cfg(target_os = "macos")]
+#[path = "mac.rs"]
+mod mac;
+
 /// Ejecuta una llamada al backend nativo aislando los pánicos. En macOS, nokhwa convierte las `NSException` de
 /// AVFoundation en pánicos de Rust (p. ej. `set_all` rechazando el formato de la capturadora); sin este aislamiento
 /// tumban el proceso. Aquí se convierten en un error de texto para mostrarlo en la interfaz.
@@ -61,21 +65,10 @@ pub fn formats(index: usize) -> Result<Vec<String>, String> {
     guard("leer formatos", || formats_inner(index))?
 }
 
-/// macOS: formatos de `AVCaptureDevice.formats` en solo lectura (no abre ni configura la cámara).
-#[cfg(target_os = "macos")]
-fn mac_formats(index: usize) -> Result<Vec<CameraFormat>, String> {
-    guard("leer formatos (AVFoundation)", || {
-        let dev = nokhwa_bindings_macos::AVCaptureDevice::new(&CameraIndex::Index(index as u32)).map_err(|e| e.to_string())?;
-        dev.supported_formats().map_err(|e| e.to_string())
-    })?
-}
-
 fn formats_inner(index: usize) -> Result<Vec<String>, String> {
     #[cfg(target_os = "macos")]
     {
-        let mut v = mac_formats(index)?;
-        v.sort_by_key(|f| std::cmp::Reverse((f.width() * f.height(), f.frame_rate())));
-        return Ok(v.iter().map(|f| format!("{:?} {}x{} fps={}", f.format(), f.width(), f.height(), f.frame_rate())).collect());
+        return mac::formats(index);
     }
     #[cfg(not(target_os = "macos"))]
     {
@@ -118,6 +111,12 @@ fn run_inner(name: Option<&str>, index: Option<usize>, mode: &Mode, latest: &Lat
         (None, Some(i)) => i,
         (None, None) => list().into_iter().find(|d| d.capture_card).or_else(|| list().into_iter().find(|d| !d.virtual_cam)).ok_or("no hay cámara")?.index,
     };
+    // macOS: captura AVFoundation propia (ver mac.rs); el `Camera` de nokhwa no sirve con la MS2109
+    #[cfg(target_os = "macos")]
+    {
+        return mac::run(idx, mode, latest);
+    }
+    #[allow(unreachable_code)]
     let mut cam = open_camera(idx, mode)?;
     let f = cam.camera_format();
     latest.set_info(format!("nokhwa {:?} {}x{}@{}", f.format(), f.width(), f.height(), f.frame_rate()));
@@ -194,6 +193,7 @@ enum Att {
     Default,
 }
 
+#[cfg_attr(target_os = "macos", allow(dead_code))]
 /// Abre el dispositivo probando una cascada de formatos (ver `pick::plan_attempts`); si todo falla, el error dice qué se probó.
 fn open_camera(idx: usize, mode: &Mode) -> Result<Camera, String> {
     let want = (mode.w, mode.h, mode.fps);
@@ -279,15 +279,7 @@ fn modes_inner(index: usize) -> Vec<(u32, u32, u32)> {
     // puede lanzar una NSException con el MS2109)
     #[cfg(target_os = "macos")]
     {
-        let mut out: Vec<(u32, u32, u32)> = mac_formats(index)
-            .unwrap_or_default()
-            .into_iter()
-            .filter(|f| f.format() == FrameFormat::MJPEG && f.frame_rate() >= 5)
-            .map(|f| (f.width(), f.height(), f.frame_rate()))
-            .collect();
-        out.sort_by_key(|m| std::cmp::Reverse((m.0 * m.1, m.2)));
-        out.dedup();
-        return out;
+        return mac::modes(index);
     }
     #[cfg(target_os = "linux")]
     {
