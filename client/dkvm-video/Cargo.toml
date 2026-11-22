@@ -24,5 +24,9 @@ features = ["input-native"]
 # la misma versión/feature que usa nokhwa (no añade nada nuevo al árbol); enumeración V4L2 directa
 v4l = { version = "0.14", features = ["v4l2-sys"] }
 
+[target.'cfg(target_os = "macos")'.dependencies]
+# la misma versión que usa nokhwa; lectura de AVCaptureDevice.formats sin abrir la cámara
+nokhwa-bindings-macos = "0.2.4"
+
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_Threading"] }

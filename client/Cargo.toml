@@ -4,7 +4,7 @@ members = ["dkvm-core", "dkvm-cli", "dkvm-video", "dkvm-gui"]
 # dkvm-gui se añadirá cuando 1-4 estén verdes (egui/eframe)
 
 [workspace.package]
-version = "0.2.1"
+version = "0.2.2"
 edition = "2021"
 license = "MIT"
 

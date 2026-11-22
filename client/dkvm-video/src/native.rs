@@ -10,7 +10,21 @@ use nokhwa::utils::{CameraFormat, CameraIndex, FrameFormat, RequestedFormat, Req
 use nokhwa::Camera;
 use std::time::{Duration, Instant};
 
+/// Ejecuta una llamada al backend nativo aislando los pánicos. En macOS, nokhwa convierte las `NSException` de
+/// AVFoundation en pánicos de Rust (p. ej. `set_all` rechazando el formato de la capturadora); sin este aislamiento
+/// tumban el proceso. Aquí se convierten en un error de texto para mostrarlo en la interfaz.
+pub fn guard<T>(what: &str, f: impl FnOnce() -> T) -> Result<T, String> {
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(f)).map_err(|p| {
+        let m = p.downcast_ref::<String>().cloned().or_else(|| p.downcast_ref::<&str>().map(|s| s.to_string())).unwrap_or_else(|| "causa desconocida".into());
+        format!("{what}: el backend de vídeo del sistema falló ({m})")
+    })
+}
+
 pub fn list() -> Vec<DeviceInfo> {
+    guard("listar cámaras", list_inner).unwrap_or_default()
+}
+
+fn list_inner() -> Vec<DeviceInfo> {
     nokhwa::nokhwa_initialize(|_| {});
     // Linux: solo nodos con capacidad de captura (los de metadatos de un mismo dispositivo UVC no sirven)
     #[cfg(target_os = "linux")]
@@ -44,6 +58,27 @@ pub fn frame_format(mode: &Mode) -> FrameFormat {
 
 /// Formatos que ofrece el dispositivo (para `vidbench formats`).
 pub fn formats(index: usize) -> Result<Vec<String>, String> {
+    guard("leer formatos", || formats_inner(index))?
+}
+
+/// macOS: formatos de `AVCaptureDevice.formats` en solo lectura (no abre ni configura la cámara).
+#[cfg(target_os = "macos")]
+fn mac_formats(index: usize) -> Result<Vec<CameraFormat>, String> {
+    guard("leer formatos (AVFoundation)", || {
+        let dev = nokhwa_bindings_macos::AVCaptureDevice::new(&CameraIndex::Index(index as u32)).map_err(|e| e.to_string())?;
+        dev.supported_formats().map_err(|e| e.to_string())
+    })?
+}
+
+fn formats_inner(index: usize) -> Result<Vec<String>, String> {
+    #[cfg(target_os = "macos")]
+    {
+        let mut v = mac_formats(index)?;
+        v.sort_by_key(|f| std::cmp::Reverse((f.width() * f.height(), f.frame_rate())));
+        return Ok(v.iter().map(|f| format!("{:?} {}x{} fps={}", f.format(), f.width(), f.height(), f.frame_rate())).collect());
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
     nokhwa::nokhwa_initialize(|_| {});
     let req = RequestedFormat::new::<RgbAFormat>(RequestedFormatType::None);
     let mut cam = Camera::new(CameraIndex::Index(index as u32), req).map_err(|e| e.to_string())?;
@@ -57,9 +92,15 @@ pub fn formats(index: usize) -> Result<Vec<String>, String> {
         }
     }
     Ok(out)
+    }
 }
 
+/// Captura hasta `latest.stop()`. Cualquier pánico del backend (NSException en macOS) vuelve como `Err`.
 pub fn run(name: Option<&str>, index: Option<usize>, mode: &Mode, latest: &Latest) -> Result<(), String> {
+    guard("captura de vídeo", || run_inner(name, index, mode, latest))?
+}
+
+fn run_inner(name: Option<&str>, index: Option<usize>, mode: &Mode, latest: &Latest) -> Result<(), String> {
     nokhwa::nokhwa_initialize(|_| {});
     // el NOMBRE manda sobre el índice (los índices cambian al reenchufar); el índice es el respaldo
     let idx = match (name, index) {
@@ -194,12 +235,17 @@ fn open_camera(idx: usize, mode: &Mode) -> Result<Camera, String> {
             Att::Closest(c) => RequestedFormat::new::<RgbAFormat>(RequestedFormatType::Closest(c)),
             Att::Default => RequestedFormat::new::<RgbAFormat>(RequestedFormatType::None),
         };
-        match Camera::new(CameraIndex::Index(idx as u32), req) {
+        // cada intento aislado: si AVFoundation lanza una excepción con un formato, se prueba el siguiente
+        let opened = guard("abrir cámara", || match Camera::new(CameraIndex::Index(idx as u32), req) {
             Ok(mut cam) => match cam.open_stream() {
-                Ok(()) => return Ok(cam),
-                Err(e) => tried.push((name, format!("iniciar captura: {e}"))),
+                Ok(()) => Ok(cam),
+                Err(e) => Err(format!("iniciar captura: {e}")),
             },
-            Err(e) => tried.push((name, e.to_string())),
+            Err(e) => Err(e.to_string()),
+        });
+        match opened {
+            Ok(Ok(cam)) => return Ok(cam),
+            Ok(Err(e)) | Err(e) => tried.push((name, e)),
         }
     }
     Err(crate::pick::describe_failure(&label, &tried))
@@ -225,6 +271,24 @@ pub fn decode_mjpeg(data: &[u8], fast: bool) -> Result<(Vec<u8>, u32, u32), Stri
 /// Modos MJPEG (ancho, alto, fps) que ofrece el dispositivo. Abre el dispositivo SIN iniciar la captura (no enciende el
 /// piloto de una webcam); solo se llama para la fuente elegida, nunca al enumerar.
 pub fn modes(index: usize) -> Vec<(u32, u32, u32)> {
+    guard("leer modos", || modes_inner(index)).unwrap_or_default()
+}
+
+fn modes_inner(index: usize) -> Vec<(u32, u32, u32)> {
+    // macOS: lectura de AVCaptureDevice.formats sin abrir la cámara (abrirla con nokhwa fija un formato y AVFoundation
+    // puede lanzar una NSException con el MS2109)
+    #[cfg(target_os = "macos")]
+    {
+        let mut out: Vec<(u32, u32, u32)> = mac_formats(index)
+            .unwrap_or_default()
+            .into_iter()
+            .filter(|f| f.format() == FrameFormat::MJPEG && f.frame_rate() >= 5)
+            .map(|f| (f.width(), f.height(), f.frame_rate()))
+            .collect();
+        out.sort_by_key(|m| std::cmp::Reverse((m.0 * m.1, m.2)));
+        out.dedup();
+        return out;
+    }
     #[cfg(target_os = "linux")]
     {
         let mut out: Vec<(u32, u32, u32)> = crate::linux::offers(index).unwrap_or_default().into_iter().filter(|o| o.fourcc.eq_ignore_ascii_case("MJPG")).map(|o| (o.w, o.h, o.fps)).filter(|m| m.2 >= 5).collect();
@@ -232,7 +296,7 @@ pub fn modes(index: usize) -> Vec<(u32, u32, u32)> {
         out.dedup();
         return out;
     }
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(not(any(target_os = "linux", target_os = "macos")))]
     {
     nokhwa::nokhwa_initialize(|_| {});
     let req = RequestedFormat::new::<RgbAFormat>(RequestedFormatType::None);
@@ -256,5 +320,22 @@ pub fn modes(index: usize) -> Vec<(u32, u32, u32)> {
     out.sort_by_key(|m| std::cmp::Reverse((m.0 * m.1, m.2)));
     out.dedup();
     out
+    }
+}
+
+#[cfg(test)]
+mod guard_tests {
+    use super::guard;
+
+    #[test]
+    fn panic_becomes_error() {
+        let r = guard("probar", || -> u32 { panic!("Uncaught exception <NSException>") });
+        let e = r.unwrap_err();
+        assert!(e.contains("probar") && e.contains("NSException"), "{e}");
+    }
+
+    #[test]
+    fn ok_passes_through() {
+        assert_eq!(guard("x", || 7).unwrap(), 7);
     }
 }
