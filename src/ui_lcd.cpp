@@ -10,6 +10,7 @@
 #include "sd_msc.h"
 #include "ble_link.h"
 #include "led_cfg.h"
+#include "dev_name.h"
 
 namespace ui {
 namespace {
@@ -189,7 +190,12 @@ void composeStatus() {
   uint8_t m = shownMode; uint16_t ac = accent(m); const Layout& L = LAYOUT[m];
   spr.fillScreen(TFT_BLACK);
   FR(0, 0, SW, 11, ac);
-  char h[16]; snprintf(h, sizeof h, "%c %s", "ABC"[m], modeName(m)); TX(2, 2, h, TFT_BLACK); TX(SW - 2 - 42, 2, "RiotKVM", TFT_BLACK);
+  char h[16]; snprintf(h, sizeof h, "%c %s", "ABC"[m], modeName(m)); TX(2, 2, h, TFT_BLACK);
+  // nombre del dongle (dev_name) a la derecha; si no cabe tras el modo (1 caracter de hueco), se recorta con '~' al final
+  char nm[devname::MAX_LEN + 1]; devname::get(nm, sizeof nm);
+  int fit = (SW - 2 - 2 - 6 * ((int)strlen(h) + 1)) / 6, nl = strlen(nm);
+  if (nl > fit) { nl = fit; nm[nl - 1] = '~'; nm[nl] = 0; }
+  TX(SW - 2 - 6 * nl, 2, nm, TFT_BLACK);
   BM(4, 20, iconOf(m), uiasset::ICON_W, uiasset::ICON_H, ac);
   TX(4, 64, subOf(m), ac);
   for (int i = 0; i < L.n; i++) rowText(L.top[i] + 2, L.type[i]);
@@ -276,7 +282,7 @@ void uiTask(void*) {
   st = Stats{};                                                      // las estadisticas de reposo empiezan tras el splash
 
   uint32_t lastSent = kvmhid::stats().sent, lastRec = blelink::stats().records, busyUntil = 0, lastSig = 0xFFFFFFFF;
-  uint32_t keys[4] = {0, 0, 0, 0}, ledGen = ledcfg::gen(); bool needFull = true;
+  uint32_t keys[4] = {0, 0, 0, 0}, ledGen = ledcfg::gen(), nameGen = devname::gen(); bool needFull = true;
   uint8_t bl = 100; bool shownCourse = false;
   for (;;) {
     ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(100));                   // dormir: course() la despierta; si no, sondeo barato cada 100 ms
@@ -295,6 +301,8 @@ void uiTask(void*) {
     // con el estado de la ultima comprobacion (sn), que es el que se ve en pantalla
     uint32_t lg = ledcfg::gen();
     if (lg != ledGen) { ledGen = lg; if (lastSig != 0xFFFFFFFF) ledUpdate(sn.ble, sn.sdFail); }
+    uint32_t ng = devname::gen();
+    if (ng != nameGen) { nameGen = ng; needFull = true; }      // nombre nuevo: cabecera
     if (busy) { st.busyUs += (uint32_t)(esp_timer_get_time() - wa); continue; }
 
     sn.ble = blelink::connected(); sn.sdFail = kvmmode::sd() && !sdmsc::ready();
