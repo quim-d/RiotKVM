@@ -266,7 +266,8 @@ impl Settings {
                 l.led = Led::Off;
             }
         });
-        if is_color {
+        // se decide DESPUÉS de los botones: si el usuario acaba de elegir Automático o Apagado, no se vuelve a Color
+        if matches!(l.led, Led::Color { .. }) {
             ui.add_space(8.0);
             ui.horizontal(|ui| {
                 ui.color_edit_button_srgb(&mut l.rgb);
