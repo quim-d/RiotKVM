@@ -10,6 +10,9 @@
 //! Todo fallo (incluidas las NSException, que `objc` 0.2 convierte en pánico) vuelve como `Err` gracias a `native::guard`.
 //! NO verificado en un Mac real: ver docs/handoff/gui-dev.md.
 
+// `msg_send!` de objc 0.2 expande `cfg(feature = "cargo-clippy")`, que rustc ya no conoce (56 avisos sin valor).
+#![allow(unexpected_cfgs)]
+
 use crate::macsel::{self, Offer};
 use crate::native::guard;
 use crate::{Frame, Latest, Mode};
