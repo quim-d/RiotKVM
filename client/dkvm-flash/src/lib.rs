@@ -3,11 +3,20 @@
 //! - [`release`]: última release de GitHub (`manifest.json`, `SHA256SUMS.txt`), descarga verificada del firmware.
 //! - [`usb`]: qué hay enchufado (dongle QKVM en modo A/B/C, ROM de descarga de Espressif, otros).
 //! - [`flash`]: flasheo del ESP32 con `espflash` (dongle -> `bootloader` -> ROM -> escribir en 0x0 -> reset -> `info`).
+//! - [`ventoy`]: microSD con Ventoy en modo MBR escrita por nosotros (Ventoy no tiene instalador para macOS).
+//! - [`exfat`]: formateador exFAT propio (la partición 1 de Ventoy), para escribirlo todo por un único descriptor.
+//! - [`disks`] y [`rawdev`]: discos externos candidatos y apertura del dispositivo crudo (authopen/udisks2/fichero).
+//!
+//! Todo lo que escribe en un dispositivo acepta también un fichero imagen: así se prueba sin tocar hardware.
 
+pub mod disks;
+pub mod exfat;
 pub mod flash;
 pub mod http;
+pub mod rawdev;
 pub mod release;
 pub mod usb;
+pub mod ventoy;
 
 use std::fmt;
 use std::sync::atomic::{AtomicBool, Ordering};
