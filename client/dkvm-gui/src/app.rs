@@ -200,6 +200,7 @@ pub struct App {
     rep_interval: u32,
     rep_secs: f32,
     settings: crate::settings::Settings,
+    tools: crate::tools::Tools,
 }
 
 /// Combinaciones que el SO local intercepta o son incómodas de teclear.
@@ -313,6 +314,7 @@ impl App {
             rep_interval: 250,
             rep_secs: 10.0,
             settings: crate::settings::Settings::new(),
+            tools: Default::default(),
         };
         app.layout = dkvm_core::layouts::canonical(&app.opts.layout).unwrap_or("es").to_string();
         app.modes = app.opts.modes.clone();
@@ -1015,6 +1017,9 @@ impl eframe::App for App {
                 if ui.selectable_label(self.settings.open, "Ajustes").clicked() {
                     self.settings.open = !self.settings.open;
                 }
+                if ui.button("Tools").on_hover_text("Flashear el firmware del dongle · preparar una microSD con Ventoy").clicked() {
+                    self.tools.open = true;
+                }
                 let info = self.video.latest.info();
                 ui.label(egui::RichText::new(if info.is_empty() { self.video.desc.clone() } else { info }).color(theme::GRIS));
             });
@@ -1186,6 +1191,7 @@ impl eframe::App for App {
             }
             None => {}
         }
+        self.tools.show(&ctx);
         if self.paste != paste_before {
             self.paste.save();
         }

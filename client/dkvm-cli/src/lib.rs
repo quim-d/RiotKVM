@@ -17,6 +17,8 @@ use std::io::{Read, Write};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
+mod tools;
+
 pub type SharedWriter = Arc<Mutex<Box<dyn Write + Send>>>;
 pub type TransportFactory = Box<dyn Fn() -> Result<Box<dyn Transport>>>;
 
@@ -196,6 +198,16 @@ enum Cmd {
     },
     /// Imprime el script de autocompletado. Ej.: eval "$(dkvm completion bash)"
     Completion { shell: Shell },
+    /// Firmware del dongle: `dkvm fw check` | `dkvm fw flash [--file X] [--port P] [--dry-run]`
+    Fw {
+        #[command(subcommand)]
+        cmd: tools::FwCmd,
+    },
+    /// microSD con Ventoy: `dkvm sd list` | `dkvm sd ventoy --disk diskN [--yes]`
+    Sd {
+        #[command(subcommand)]
+        cmd: tools::SdCmd,
+    },
 }
 
 struct App<'a> {
@@ -500,6 +512,8 @@ fn dispatch(app: &mut App) -> Result<i32> {
             })?;
             Ok(0)
         }
+        Cmd::Fw { cmd } => tools::fw(app, cmd),
+        Cmd::Sd { cmd } => tools::sd(app, cmd),
         Cmd::Completion { shell } => {
             use clap::CommandFactory;
             let mut buf: Vec<u8> = Vec::new();
