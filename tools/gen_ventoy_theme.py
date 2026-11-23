@@ -96,7 +96,6 @@ FONT_SIZES = sorted({(False, L["item"]) for L in LAYOUTS.values()} | {(True, L["
 LEMA = "si no nos dejan soñar, no les dejaremos dormir"
 PIE = [
     "la emancipación de los trabajadores será obra de los trabajadores mismos — AIT, 1864",
-    "la anarquía es la más alta expresión del orden — Élisée Reclus",
     "Tierra y Libertad — Ricardo Flores Magón",
     "llevamos un mundo nuevo en nuestros corazones — Durruti",
 ]

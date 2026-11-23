@@ -1,4 +1,4 @@
-//! Identidad visual QKVM (docs/DESIGN.md): fondo negro, verde fósforo, acentos por modo. Sin animaciones.
+//! Identidad visual RiotKVM (docs/DESIGN.md): fondo negro, verde fósforo, acentos por modo. Sin animaciones.
 
 use eframe::egui::{self, Color32, FontFamily, FontId, TextStyle};
 

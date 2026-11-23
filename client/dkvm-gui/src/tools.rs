@@ -331,9 +331,9 @@ impl Tools {
             }
             ui.horizontal(|ui| {
                 ui.label("puerto:");
-                let sel = self.port.clone().unwrap_or_else(|| "automático (dongle QKVM o ROM 303A)".into());
+                let sel = self.port.clone().unwrap_or_else(|| "automático (dongle RiotKVM o ROM 303A)".into());
                 egui::ComboBox::from_id_salt("fw-port").selected_text(sel).width(330.0).show_ui(ui, |ui| {
-                    ui.selectable_value(&mut self.port, None, "automático (dongle QKVM o ROM 303A)");
+                    ui.selectable_value(&mut self.port, None, "automático (dongle RiotKVM o ROM 303A)");
                     for p in &self.ports {
                         ui.selectable_value(&mut self.port, Some(p.name.clone()), p.label());
                     }

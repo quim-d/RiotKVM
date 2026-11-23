@@ -54,7 +54,7 @@ impl Disk {
 
     pub fn summary(&self) -> String {
         let tag = if self.is_qkvm() {
-            " · dongle QKVM"
+            " · dongle RiotKVM"
         } else if self.is_card_reader() {
             " · lector de tarjetas"
         } else {

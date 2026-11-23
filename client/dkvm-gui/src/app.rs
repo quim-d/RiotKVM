@@ -871,7 +871,7 @@ impl eframe::App for App {
                 if let Some(t) = &self.skull {
                     ui.add(egui::Image::new(t).fit_to_exact_size(Vec2::splat(24.0)));
                 }
-                ui.label(egui::RichText::new("QKVM").strong().size(16.0).color(theme::HUESO));
+                ui.label(egui::RichText::new("RiotKVM").strong().size(16.0).color(theme::HUESO));
                 if let Some(t) = self.mode_icons.iter().find(|(n, _)| *n == mode_name).map(|(_, t)| t) {
                     ui.add(egui::Image::new(t).fit_to_exact_size(Vec2::splat(20.0)));
                 }

@@ -44,7 +44,7 @@ impl Port {
             _ => "----:----".into(),
         };
         let what = match self.role {
-            Role::Qkvm(m) => format!("dongle QKVM (modo {m})"),
+            Role::Qkvm(m) => format!("dongle RiotKVM (modo {m})"),
             Role::Espressif => "Espressif USB (ROM de descarga o USB-JTAG)".into(),
             Role::Other => self.product.clone(),
         };
