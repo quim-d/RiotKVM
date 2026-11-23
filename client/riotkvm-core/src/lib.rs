@@ -12,6 +12,7 @@ pub mod input;
 pub mod keys;
 pub mod latency;
 pub mod layouts;
+pub mod led;
 pub mod protocol;
 pub mod rt;
 pub mod scancode;
@@ -21,5 +22,6 @@ pub mod transport;
 
 pub use error::{Error, Result};
 pub use fw_version::FwVersion;
+pub use led::Led;
 pub use input::{abs_from_pixels, parse_screen, Kvm, MouseCoalescer};
 pub use transport::{MockHandle, MockTransport, SerialTransport, Transport};

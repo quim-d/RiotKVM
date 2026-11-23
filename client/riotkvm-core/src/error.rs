@@ -46,6 +46,9 @@ pub fn usage<T>(msg: impl Into<String>) -> Result<T> {
 
 /// Error `err ...` del dongle con una pista legible según el código.
 pub fn device_error(line: &str, reply: &str) -> Error {
+    if line.split_whitespace().next() == Some("led") && reply.trim() == "err unknown" {
+        return Error::Device(crate::led::UNSUPPORTED.into()); // firmware anterior a 1.2.0
+    }
     let hint = match reply.split_whitespace().nth(1) {
         Some("nohost") => " (el servidor no ha enumerado el dongle: ¿USB conectado y servidor encendido?)",
         Some("bootproto") => " (el servidor está en protocolo de arranque/BIOS: el ratón no está disponible; usa el teclado)",

@@ -110,6 +110,18 @@ impl Kvm {
         Ok(crate::FwVersion::from_info_reply(&self.info()?))
     }
 
+    /// Cambia la luz del dongle (firmware 1.2.0+; persistente en el dongle). Serie: espera el `ok`; BLE: SET_LED sin
+    /// respuesta, y los errores (rango, firmware viejo) llegan por ERR al vaciar. Firmware viejo -> [`crate::led::UNSUPPORTED`].
+    pub fn set_led(&mut self, led: crate::Led) -> Result<()> {
+        self.raw(&led.cmd())?;
+        self.t.flush()
+    }
+
+    /// Ajuste actual de la luz según `info` (`led=`). `Ok(None)` = el firmware no admite control de la luz.
+    pub fn led(&mut self) -> Result<Option<crate::Led>> {
+        Ok(crate::Led::from_info_reply(&self.info()?))
+    }
+
     /// Contadores del dongle (dos líneas: HID y SD) o `reset`.
     pub fn stats(&mut self, reset: bool) -> Result<String> {
         self.raw(&P::stats(reset))

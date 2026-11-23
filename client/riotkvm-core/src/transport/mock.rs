@@ -8,7 +8,7 @@ use std::collections::{BTreeSet, HashMap};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Duration;
 
-const KNOWN: [&str; 12] = ["type", "kd", "ku", "kall", "mm", "ma", "mbr", "mba", "status", "info", "stats", "bootloader"];
+const KNOWN: [&str; 13] = ["type", "kd", "ku", "kall", "mm", "ma", "mbr", "mba", "status", "info", "stats", "bootloader", "led"];
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MockEvent {
@@ -36,6 +36,8 @@ pub struct MockState {
     pub fail_next: Option<String>,
     /// Respuesta `err ...` fija para estas líneas exactas.
     pub fail_lines: HashMap<String, String>,
+    /// Ajuste de la luz (`led`); `None` = nunca tocado (auto).
+    pub led: Option<crate::Led>,
 }
 
 impl MockState {
@@ -173,7 +175,12 @@ impl MockTransport {
                 st.events.push(MockEvent::Mba(st.abs_buttons));
             }
             "status" => return "host=1 leds=0x00 hidready=1".into(),
-            "info" => return "fw=mock build=\"mock\"".into(),
+            "info" => return format!("fw=mock led={} build=\"mock\"", st.led.unwrap_or(crate::Led::Auto)),
+            "led" if a.trim().is_empty() => return format!("led={}", st.led.unwrap_or(crate::Led::Auto)),
+            "led" => match crate::Led::parse(a) {
+                Ok(l) => st.led = Some(l),
+                Err(_) => return "err args".into(),
+            },
             "stats" if a.trim() != "reset" => return "cmd_n=0 snd_n=0\nsd_n=0".into(),
             _ => {}
         }

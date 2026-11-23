@@ -21,6 +21,8 @@ struct World {
     mtu: usize,
     inbox: Option<Sender<Inbox>>,
     info: Vec<u8>,
+    /// Si está, INFO se genera en cada lectura (el simulador refleja su estado, p. ej. la luz).
+    info_fn: Option<Box<dyn Fn() -> Vec<u8> + Send>>,
     responder: Option<Responder>,
 }
 
@@ -37,6 +39,9 @@ impl MockDongle {
     }
     pub fn set_info(&self, info: &[u8]) {
         self.0.lock().unwrap().info = info.to_vec();
+    }
+    pub fn set_info_fn(&self, f: impl Fn() -> Vec<u8> + Send + 'static) {
+        self.0.lock().unwrap().info_fn = Some(Box::new(f));
     }
     pub fn set_mtu(&self, mtu: usize) {
         self.0.lock().unwrap().mtu = mtu;
@@ -134,7 +139,11 @@ impl GattLink for MockLink {
         Ok(())
     }
     fn read_info(&mut self) -> Result<Vec<u8>> {
-        Ok(self.0.lock().unwrap().info.clone())
+        let w = self.0.lock().unwrap();
+        Ok(match &w.info_fn {
+            Some(f) => f(),
+            None => w.info.clone(),
+        })
     }
     fn disconnect(&mut self) {}
 }

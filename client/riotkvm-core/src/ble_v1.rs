@@ -22,6 +22,8 @@ pub const WHEEL: u8 = 0x08;
 pub const PING: u8 = 0x10;
 pub const GET_STATE: u8 = 0x11;
 pub const SET_MODE: u8 = 0x12;
+/// Luz (firmware 1.2.0+): `mode, r, g, b, bright`. Ver [`crate::led`].
+pub const SET_LED: u8 = 0x13;
 // EVT
 pub const STATE: u8 = 0x81;
 pub const PONG: u8 = 0x82;
@@ -102,17 +104,18 @@ pub fn state_text(flags: u8, leds: u8, mode: u8) -> String {
     )
 }
 
-/// INFO (8 bytes) -> texto legible. `fw=X.Y.Z` con el patch del byte [6] (0 en firmwares que no lo envían);
+/// INFO (8 bytes; 13 con la luz desde 1.2.0) -> texto legible (`led=` solo si el firmware lo envía). `fw=X.Y.Z` con el patch del byte [6] (0 en firmwares que no lo envían);
 /// la versión estructurada sale de [`crate::FwVersion::from_info`] o de `FwVersion::from_info_reply`.
 pub fn info_text(b: &[u8]) -> String {
     if b.len() < 6 {
         return format!("info ilegible ({} bytes)", b.len());
     }
     let caps = u16::from_le_bytes([b[4], b[5]]);
-    let names = ["teclado", "raton-rel", "raton-abs", "msc/sd", "set-mode", "ping"];
+    let names = ["teclado", "raton-rel", "raton-abs", "msc/sd", "set-mode", "ping", "luz"];
     let c: Vec<&str> = names.iter().enumerate().filter(|(i, _)| caps & (1 << i) != 0).map(|(_, n)| *n).collect();
     let fw = crate::FwVersion::from_info(b).expect("len >= 6");
-    format!("proto={} fw={} mode={} caps={}", b[0], fw, mode_letter(b[3]), c.join(","))
+    let led = crate::Led::from_info_bytes(b).map(|l| format!(" led={l}")).unwrap_or_default();
+    format!("proto={} fw={} mode={} caps={}{led}", b[0], fw, mode_letter(b[3]), c.join(","))
 }
 
 fn num(it: &mut std::str::SplitWhitespace, name: &str) -> Result<i64> {
@@ -249,6 +252,10 @@ impl Codec for BleV1 {
                 };
                 one(SET_MODE, &[m])
             }
+            "led" => {
+                let l = crate::Led::parse(rest)?;
+                one(SET_LED, &l.payload())
+            }
             "stats" | "bootloader" => Err(Error::Usage(format!("'{cmd}' solo existe por CDC (serie): usa -p COMx"))),
             other => Err(Error::Usage(format!("orden desconocida para BLE: {other:?}"))),
         }
@@ -265,6 +272,7 @@ impl Codec for BleV1 {
                     out.push(Decoded::Status(t));
                 }
                 (PONG, 6) => out.push(Decoded::Pong { seq: u16::from_le_bytes([p[0], p[1]]) as u32 }),
+                (ERR, 2) if p[0] == SET_LED && p[1] == 3 => out.push(Decoded::Err(crate::led::UNSUPPORTED.into())),
                 (ERR, 2) => out.push(Decoded::Err(format!("el dongle notificó err {} (op 0x{:02x}){}", err_name(p[1]), p[0], err_hint(p[1])))),
                 _ => {}
             }
@@ -316,6 +324,8 @@ pub mod sim {
         pub flags: u8,
         pub leds: u8,
         pub log: Vec<(u8, Vec<u8>)>,
+        /// Ajuste de la luz (SET_LED). `None` = simula un firmware anterior a 1.2.0 (responde UNKNOWN_OP).
+        pub led: Option<[u8; 5]>,
         pub t0: Option<std::time::Instant>,
     }
 
@@ -325,13 +335,23 @@ pub mod sim {
     impl Sim {
         /// Estado inicial: host enumerado, HID y SD disponibles, modo C.
         pub fn new() -> Sim {
-            Sim(Arc::new(Mutex::new(SimState { mode: 2, flags: 0b0011_0101, t0: Some(std::time::Instant::now()), ..Default::default() })))
+            Sim(Arc::new(Mutex::new(SimState { mode: 2, flags: 0b0011_0101, t0: Some(std::time::Instant::now()), led: Some([0, 0, 255, 70, 35]), ..Default::default() })))
         }
         pub fn state(&self) -> SimState {
             self.0.lock().unwrap().clone()
         }
         pub fn set_flags(&self, flags: u8) {
             self.0.lock().unwrap().flags = flags;
+        }
+        /// INFO como el firmware 1.2.0 (13 bytes con la luz) o de 8 bytes si simula uno anterior (`led: None`).
+        pub fn info_bytes(&self) -> Vec<u8> {
+            let s = self.0.lock().unwrap();
+            let mut b = vec![PROTO_VERSION, 1, 2, s.mode, 0x3f, 0, 0, 0];
+            if let Some(l) = s.led {
+                b[4] |= 0x40;
+                b.extend_from_slice(&l);
+            }
+            b
         }
         pub fn state_evt(&self) -> Vec<u8> {
             let s = self.0.lock().unwrap();
@@ -409,7 +429,10 @@ pub mod sim {
                         evts.extend(record(STATE, &[s.flags, s.leds, s.mode]));
                     }
                     (SET_MODE, 1) => err(2, &mut evts),
-                    (0x01..=0x12, _) => err(4, &mut evts),
+                    (SET_LED, _) if s.led.is_none() => err(3, &mut evts),
+                    (SET_LED, 5) if p[0] <= 2 && p[4] <= 100 => s.led = Some([p[0], p[1], p[2], p[3], p[4]]),
+                    (SET_LED, 5) => err(2, &mut evts),
+                    (0x01..=0x13, _) => err(4, &mut evts),
                     _ => err(3, &mut evts),
                 }
             }
@@ -475,6 +498,29 @@ mod tests {
         assert!(matches!(c.encode("stats"), Err(Error::Usage(_))));
         assert_eq!(enc(&mut c, "mode C"), vec![vec![0x12, 1, 2]]);
         assert_eq!(c.ping(0x1_0003), Some(vec![0x10, 2, 3, 0]));
+    }
+
+    #[test]
+    fn led_records_info_and_old_firmware() {
+        let mut c = BleV1;
+        assert_eq!(enc(&mut c, "led auto"), vec![vec![SET_LED, 5, 0, 0, 0, 0, 0]]);
+        assert_eq!(enc(&mut c, "led off"), vec![vec![SET_LED, 5, 2, 0, 0, 0, 0]]);
+        assert_eq!(enc(&mut c, "led FF8800 60"), vec![vec![SET_LED, 5, 1, 0xFF, 0x88, 0, 60]]);
+        assert!(c.encode("led ff8800 101").is_err());
+        assert!(c.encode("led rojo").is_err());
+        // INFO de 13 bytes: caps bit6 y led=
+        assert_eq!(info_text(&[1, 1, 2, 2, 0x7f, 0, 0, 0, 1, 0xFF, 0, 0, 50]), "proto=1 fw=1.2.0 mode=C caps=teclado,raton-rel,raton-abs,msc/sd,set-mode,ping,luz led=FF0000@50");
+        // simulador: aplica, valida rangos y, como firmware viejo, responde UNKNOWN_OP -> mensaje claro
+        let sim = sim::Sim::new();
+        assert!(sim.handle(&enc(&mut c, "led 010203 4").concat()).is_empty());
+        assert_eq!(sim.state().led, Some([1, 1, 2, 3, 4]));
+        assert_eq!(sim.handle(&record(SET_LED, &[3, 0, 0, 0, 0])), vec![record(ERR, &[SET_LED, 2])]);
+        assert_eq!(sim.handle(&record(SET_LED, &[1, 0, 0, 0, 101])), vec![record(ERR, &[SET_LED, 2])]);
+        assert_eq!(sim.handle(&record(SET_LED, &[1, 0, 0])), vec![record(ERR, &[SET_LED, 4])]);
+        sim.0.lock().unwrap().led = None;
+        let r = sim.handle(&enc(&mut c, "led off").concat());
+        assert_eq!(r, vec![record(ERR, &[SET_LED, 3])]);
+        assert_eq!(c.decode(&r[0]), vec![Decoded::Err(crate::led::UNSUPPORTED.into())]);
     }
 
     #[test]
