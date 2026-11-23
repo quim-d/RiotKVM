@@ -137,7 +137,7 @@ int bootLines(const char** o) {
   return n;
 }
 
-// ---- splash (UI_SPLASH_VARIANT: 1 glitch, 2 BIOS, 3 apertura). ~2,6 s, una sola vez ----
+// ---- splash (UI_SPLASH_VARIANT: 1 glitch, 2 BIOS, 3 apertura). ~2 s, una sola vez ----
 void splashV1(uint32_t t) {
   uint32_t fr = t / 40;
   int rows = t >= 380 ? 64 : (int)(t * 64 / 380), gl = t < 520 ? (int)((520 - t) / 70) + 1 : 0;
@@ -151,15 +151,18 @@ void splashV1(uint32_t t) {
   char m[12]; snprintf(m, sizeof m, "mode %c", kvmmode::letter()); typed(m, 76, 68, t, 1050, 30, C_AMBER);
   madeBy(1, t);                                         // arriba a la derecha: abajo esta "mode C"
 }
+// tiempos en ms reales (UI_SPLASH_MS = 2000): el texto se escribe rapido y queda completo hacia los 800 ms para poder
+// leerlo; los ultimos 500 ms la calavera parpadea (4 fases de 125 ms, acaba visible)
 void splashV2(uint32_t t) {
   const char* ln[4]; int n = bootLines(ln);
-  typed("> boot", 3, 4, t, 0, 14, C_GREEN);
-  for (int i = 0; i < n; i++) typed(ln[i], 3, 15 + 11 * i, t, 150 * (i + 1), 14, C_GREEN);
-  if (t >= 750 && t < 1000 && ((t / 120) & 1) == 0) FR(3, 15 + 11 * n + 2, 6, 8, C_GREEN);
-  int lvl = t < 450 ? 0 : (int)((t - 450) / 25); if (lvl > 16) lvl = 16;
-  if (lvl) skullDither(90, 8, lvl);
-  if (t >= 850) eyes(90, 8, t < 1050 ? C_CYAN : C_MAG, t >= 1000 && t < 1060);
-  typed("RiotKVM", 3, 62, t, 900, 25, C_AMBER, 2);
+  typed("> boot", 3, 4, t, 0, 8, C_GREEN);
+  for (int i = 0; i < n; i++) typed(ln[i], 3, 15 + 11 * i, t, 80 * (i + 1), 6, C_GREEN);
+  if (t >= 450 && t < 650 && ((t / 100) & 1) == 0) FR(3, 15 + 11 * n + 2, 6, 8, C_GREEN);
+  bool blinkOff = t >= UI_SPLASH_MS - 500 && (((t - (UI_SPLASH_MS - 500)) / 125) & 1) == 0;
+  int lvl = t < 250 ? 0 : (int)((t - 250) / 20); if (lvl > 16) lvl = 16;
+  if (lvl && !blinkOff) skullDither(90, 8, lvl);
+  if (t >= 570 && !blinkOff) eyes(90, 8, t < 750 ? C_CYAN : C_MAG, false);
+  typed("RiotKVM", 3, 62, t, 600, 20, C_AMBER, 2);
   madeBy(73, t);                                        // abajo a la derecha: bajo la calavera (filas 8..71), a la derecha del titulo (x <= 87)
 }
 void splashV3(uint32_t t) {

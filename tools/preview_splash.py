@@ -21,7 +21,7 @@ def font(cands, size, fallback):
 F = font([("C:/Windows/Fonts/consola.ttf", 0), ("/System/Library/Fonts/Menlo.ttc", 0)], 8, ImageFont.load_default())   # Windows o macOS
 F2 = font([("C:/Windows/Fonts/consolab.ttf", 0), ("/System/Library/Fonts/Menlo.ttc", 1)], 14, F)
 IM = None
-SPLASH_MS, ANIM_MS = 2600, 1200
+SPLASH_MS, ANIM_MS = 2000, 2000
 # TomThumb (GFXfont de LovyanGFX): glifos reales para la firma
 TT = None
 _tt = os.path.join(root, ".pio", "libdeps", "tdongle-s3", "LovyanGFX", "src", "lgfx", "Fonts", "GFXFF", "TomThumb.h")
@@ -93,19 +93,20 @@ def v1(t):
 BAYER = [[0,8,2,10],[12,4,14,6],[3,11,1,9],[15,7,13,5]]
 def v2(t):
     im = Image.new("RGB", (W, H)); d = ImageDraw.Draw(im)
-    lines = [("> boot", 0, GREEN), ("[ OK ] usb", 150, GREEN), ("[ OK ] hid", 300, GREEN), ("[ OK ] sd", 450, GREEN), ("[ OK ] ble", 600, GREEN)]
+    lines = [("> boot", 0, 8), ("[ OK ] usb", 80, 6), ("[ OK ] hid", 160, 6), ("[ OK ] sd", 240, 6), ("[ OK ] ble", 320, 6)]
     y = 4
-    for s, t0, c in lines:
-        typed(d, s, 3, y, t, t0, 14, c); y += 11
-    if t >= 750: d.rectangle((3, y + 2, 8, y + 9), fill=GREEN) if (t // 120) % 2 == 0 and t < 1000 else None
-    lvl = 0 if t < 450 else min(16, int((t - 450) / 25))     # 0..16 umbral de tramado
+    for s, t0, per in lines:
+        typed(d, s, 3, y, t, t0, per, GREEN); y += 11
+    if 450 <= t < 650 and (t // 100) % 2 == 0: d.rectangle((3, y + 2, 8, y + 9), fill=GREEN)
+    off = t >= SPLASH_MS - 500 and ((t - (SPLASH_MS - 500)) // 125) % 2 == 0   # ultimo 0,5 s: la calavera parpadea
+    lvl = 0 if (t < 250 or off) else min(16, int((t - 250) / 20))     # 0..16 umbral de tramado
     sk = Image.new("RGB", (W, H)); sd = ImageDraw.Draw(sk); skull(sd, 90, 8)
     px, sp = im.load(), sk.load()
     for yy in range(8, 72):
         for xx in range(90, 154):
             if sp[xx, yy] != (0, 0, 0) and BAYER[yy % 4][xx % 4] < lvl: px[xx, yy] = sp[xx, yy]
-    if t >= 850: eyes(d, 90, 8, CY if t < 1050 else MAG, 1000 <= t < 1060)
-    if t >= 900: typed(d, "RiotKVM", 3, 62, t, 900, 40, AMB)
+    if t >= 570 and not off: eyes(d, 90, 8, CY if t < 750 else MAG, False)
+    if t >= 600: typed(d, "RiotKVM", 3, 62, t, 600, 20, AMB)
     made_by(d, 73, t)
     return im
 
@@ -127,7 +128,7 @@ def v3(t):
 
 out = os.path.join(root, "docs", "ui"); os.makedirs(out, exist_ok=True)
 for name, fn in (("v1_glitch", v1), ("v2_bios", v2), ("v3_apertura", v3)):
-    ts = [r * ANIM_MS // SPLASH_MS for r in range(0, SPLASH_MS + 1, 40)]   # fotogramas cada 40 ms reales
+    ts = [r * ANIM_MS // SPLASH_MS for r in range(0, SPLASH_MS, 40)]   # fotogramas cada 40 ms reales
     fr = [scan(fn(t)).resize((W * 4, H * 4), Image.NEAREST) for t in ts]
     fr[0].save(os.path.join(out, "splash_%s.gif" % name), save_all=True, append_images=fr[1:] + [fr[-1]] * 20, duration=40, loop=0)
     pick = [0, 12, 18, 24, 30, 36, 42, len(ts) - 1]; sel = [scan(fn(ts[i])) for i in pick]

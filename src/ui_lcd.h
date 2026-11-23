@@ -17,11 +17,12 @@
 #define UI_SPLASH_VARIANT 2    // 1 = glitch, 2 = BIOS (defecto), 3 = apertura
 #endif
 #ifndef UI_SPLASH_MS
-#define UI_SPLASH_MS 2600      // duracion del splash de arranque (antes 1200 y 1800: la animacion va ~2,2x mas lenta; solo la pantalla:
+#define UI_SPLASH_MS 2000      // duracion del splash de arranque: texto rapido, todo legible hacia 0,8 s, y el ultimo 0,5 s la calavera
+                               // parpadea (variante 2). Solo la pantalla:
                                // USB ya ha arrancado y BLE arranca a los 3 s desde loop(), sin esperar a la UI)
 #endif
 #ifndef UI_SPLASH_ANIM_MS
-#define UI_SPLASH_ANIM_MS 1200 // escala de tiempos con la que estan escritas las variantes (splashV1..V3)
+#define UI_SPLASH_ANIM_MS UI_SPLASH_MS // tiempo real (V2 esta escrita en ms reales; V1/V3, en 1200 ms, terminan antes y se quedan quietas)
 #endif
 
 namespace ui {
