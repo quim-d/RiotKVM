@@ -68,7 +68,27 @@ impl BlockDev for FileDev {
         self.f.write_all_at(data, off).map_err(|e| Error::msg(format!("escritura en {off}: {e}")))
     }
     fn sync(&mut self) -> Result<()> {
-        self.f.sync_all().map_err(|e| Error::msg(format!("sync: {e}")))
+        match self.f.sync_all() {
+            Ok(()) => Ok(()),
+            // macOS: sync_all usa fcntl(F_FULLFSYNC), que un dispositivo crudo (/dev/rdiskN) rechaza con ENOTTY.
+            // Ahí las escrituras ya van sin búfer del sistema: basta fsync y pedir al disco que vacíe su caché.
+            Err(e) if matches!(e.raw_os_error(), Some(libc::ENOTTY) | Some(libc::ENOTSUP) | Some(libc::EINVAL)) => {
+                use std::os::unix::io::AsRawFd;
+                let fd = self.f.as_raw_fd();
+                // SAFETY: descriptor propio y abierto durante toda la llamada
+                if unsafe { libc::fsync(fd) } != 0 {
+                    return Err(Error::msg(format!("sync: {}", std::io::Error::last_os_error())));
+                }
+                #[cfg(target_os = "macos")]
+                {
+                    const DKIOCSYNCHRONIZECACHE: libc::c_ulong = 0x2000_6416; // _IO('d', 22)
+                    // SAFETY: ioctl sin argumentos sobre nuestro descriptor; si el dispositivo no lo admite, se ignora
+                    unsafe { libc::ioctl(fd, DKIOCSYNCHRONIZECACHE) };
+                }
+                Ok(())
+            }
+            Err(e) => Err(Error::msg(format!("sync: {e}"))),
+        }
     }
 }
 
