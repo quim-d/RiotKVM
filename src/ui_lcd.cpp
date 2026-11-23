@@ -137,7 +137,7 @@ int bootLines(const char** o) {
   return n;
 }
 
-// ---- splash (UI_SPLASH_VARIANT: 1 glitch, 2 BIOS, 3 apertura). ~1,2 s, una sola vez ----
+// ---- splash (UI_SPLASH_VARIANT: 1 glitch, 2 BIOS, 3 apertura). ~2,6 s, una sola vez ----
 void splashV1(uint32_t t) {
   uint32_t fr = t / 40;
   int rows = t >= 380 ? 64 : (int)(t * 64 / 380), gl = t < 520 ? (int)((520 - t) / 70) + 1 : 0;

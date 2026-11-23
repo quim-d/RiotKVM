@@ -21,7 +21,7 @@ def font(cands, size, fallback):
 F = font([("C:/Windows/Fonts/consola.ttf", 0), ("/System/Library/Fonts/Menlo.ttc", 0)], 8, ImageFont.load_default())   # Windows o macOS
 F2 = font([("C:/Windows/Fonts/consolab.ttf", 0), ("/System/Library/Fonts/Menlo.ttc", 1)], 14, F)
 IM = None
-SPLASH_MS, ANIM_MS = 1800, 1200
+SPLASH_MS, ANIM_MS = 2600, 1200
 # TomThumb (GFXfont de LovyanGFX): glifos reales para la firma
 TT = None
 _tt = os.path.join(root, ".pio", "libdeps", "tdongle-s3", "LovyanGFX", "src", "lgfx", "Fonts", "GFXFF", "TomThumb.h")
