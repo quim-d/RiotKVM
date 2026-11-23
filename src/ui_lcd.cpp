@@ -9,6 +9,7 @@
 #include "hid_dev.h"
 #include "sd_msc.h"
 #include "ble_link.h"
+#include "led_cfg.h"
 
 namespace ui {
 namespace {
@@ -60,7 +61,14 @@ void apa(uint8_t r, uint8_t gr, uint8_t b) {
   sh(0xE0 | 4); sh(b); sh(gr); sh(r);
   for (int i = 0; i < 4; i++) sh(0xFF);
 }
+// Ajuste del usuario (ledcfg): AUTO = color por estado (lo de siempre, al 90/255 ~ 35 %); FIXED = su color y brillo
+// (0..100 % del canal, mismo brillo global APA102; 35 % ~ brillo de AUTO); OFF = apagado.
+// Decision: en FIXED el fallo de SD NO pinta rojo. Es una eleccion explicita del usuario y el fallo ya se ve en la
+// pantalla (fila SD) y en `status`/STATE; quien quiera el aviso por color usa AUTO.
 void ledUpdate(bool ble, bool sdFail) {
+  ledcfg::Cfg c = ledcfg::get();
+  if (c.mode == ledcfg::OFF) { apa(0, 0, 0); return; }
+  if (c.mode == ledcfg::FIXED) { apa(c.r * c.bright / 100, c.g * c.bright / 100, c.b * c.bright / 100); return; }
   uint8_t r, gr, b;
   if (sdFail) { r = 255; gr = 0; b = 0; }
   else if (ble) { r = 255; gr = 0; b = 200; }
@@ -268,7 +276,7 @@ void uiTask(void*) {
   st = Stats{};                                                      // las estadisticas de reposo empiezan tras el splash
 
   uint32_t lastSent = kvmhid::stats().sent, lastRec = blelink::stats().records, busyUntil = 0, lastSig = 0xFFFFFFFF;
-  uint32_t keys[4] = {0, 0, 0, 0}; bool needFull = true;
+  uint32_t keys[4] = {0, 0, 0, 0}, ledGen = ledcfg::gen(); bool needFull = true;
   uint8_t bl = 100; bool shownCourse = false;
   for (;;) {
     ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(100));                   // dormir: course() la despierta; si no, sondeo barato cada 100 ms
@@ -283,6 +291,10 @@ void uiTask(void*) {
     uint32_t idle = now - wakeAt;
     uint8_t want = (UI_OFF_MS && idle >= UI_OFF_MS) ? 0 : (UI_DIM_MS && idle >= UI_DIM_MS) ? 15 : 100;
     if (want != bl) { bl = want; backlight(bl); }                    // un ledcWrite: coste despreciable
+    // cambio de ajuste de la luz: se pinta YA aunque haya actividad (lo pide el usuario y son ~100 flancos de GPIO);
+    // con el estado de la ultima comprobacion (sn), que es el que se ve en pantalla
+    uint32_t lg = ledcfg::gen();
+    if (lg != ledGen) { ledGen = lg; if (lastSig != 0xFFFFFFFF) ledUpdate(sn.ble, sn.sdFail); }
     if (busy) { st.busyUs += (uint32_t)(esp_timer_get_time() - wa); continue; }
 
     sn.ble = blelink::connected(); sn.sdFail = kvmmode::sd() && !sdmsc::ready();

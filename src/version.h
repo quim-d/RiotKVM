@@ -6,7 +6,7 @@
 // Empieza en 1.1.0 y no en 1.0.0: los firmwares anteriores al versionado ya anunciaban 1.0 por INFO BLE (patch 0),
 // asi que 1.0.0 seria indistinguible de ellos para el comprobador de versiones.
 #define RIOTKVM_FW_MAJOR 1
-#define RIOTKVM_FW_MINOR 1
+#define RIOTKVM_FW_MINOR 2
 #define RIOTKVM_FW_PATCH 0
 
 // Version del contrato BLE de docs/PROTOCOL.md. Solo sube con un cambio incompatible (el cliente rechaza otra).

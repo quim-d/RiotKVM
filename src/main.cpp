@@ -8,6 +8,7 @@
 #include "hid_dev.h"
 #include "sd_msc.h"
 #include "kvm_mode.h"
+#include "led_cfg.h"
 #include "ble_link.h"
 #include "version.h"
 #include "ui_lcd.h"   // LCD/LED: dueno lcd-dev (src/ui_lcd.*), tarea propia
@@ -128,6 +129,24 @@ static void cmd(char* l, size_t len, int64_t evUs) {
     if (!m) { replyf("mode=%c", kvmmode::letter()); return; }
     if (m < 'a' || m > 'c' || args[1]) { reply("err range"); return; }
     reply("ok"); delay(20); kvmmode::request(m - 'a');   // reinicia y re-enumera con otro PID
+  } else if (!strcmp(c, "led")) {   // luz: `led` (consulta) | `led auto` | `led off` | `led RRGGBB [brillo 0..100]`
+    char d[16];
+    if (!*args) { ledcfg::describe(d, sizeof d); replyf("led=%s", d); return; }
+    ledcfg::Cfg cf = ledcfg::get();
+    if (!strcmp(args, "auto")) cf.mode = ledcfg::AUTO;
+    else if (!strcmp(args, "off")) cf.mode = ledcfg::OFF;
+    else {
+      const char* q = args; if (*q == '#') q++;
+      char hex[7]; size_t k = 0;
+      while (k < 6 && isxdigit((unsigned char)q[k])) { hex[k] = q[k]; k++; }
+      if (k != 6 || (q[6] && q[6] != ' ')) { reply("err args"); return; }
+      hex[6] = 0; uint32_t rgb = strtoul(hex, nullptr, 16);
+      long br = cf.bright;
+      if (q[6]) { int n = parseNums(q + 7, &br, 1); if (n != 1) { reply("err args"); return; } }
+      if (br < 0 || br > 100) { reply("err range"); return; }
+      cf = ledcfg::Cfg{ledcfg::FIXED, (uint8_t)(rgb >> 16), (uint8_t)(rgb >> 8), (uint8_t)rgb, (uint8_t)br};
+    }
+    reply(ledcfg::set(cf) ? "ok" : "err range");
   } else if (!strcmp(c, "log")) {
     for (uint32_t i = 0; i < logLen; i += 200) { char t[205]; uint32_t k = logLen - i > 200 ? 200 : logLen - i; memcpy(t, logBuf + i, k); t[k] = 0; for (char* q = t; *q; q++) if (*q < 32) *q = 0x7c; reply(t); }
     if (!logLen) reply("(vacio)");
@@ -163,8 +182,9 @@ static void cmd(char* l, size_t len, int64_t evUs) {
   } else if (!strcmp(c, "info")) {
     const uint8_t* cd = tud_descriptor_configuration_cb(0);
     char bd[80]; blelink::diag(bd, sizeof bd);
-    replyf("fw=" RIOTKVM_FW_VERSION " name=RiotKVM proto=" RIOTKVM_STR(RIOTKVM_BLE_PROTO) " mode=%c rst=%d crashes=%lu safe=%d ble_started=%d [%s] build=\"%s %s\" sd_mb=%lu boot_sd_ms=%lu boot_usb_ms=%lu sd_init_ms=%lu ui_t0=%lu ui_splash_ms=%lu ui_frame_us_max=%lu cfg_len=%u n_itf=%u",
-           kvmmode::letter(), (int)rstReason, (unsigned long)crashCount, safeMode ? 1 : 0, bleStarted ? 1 : 0, bd, __DATE__, __TIME__,
+    char ld[16]; ledcfg::describe(ld, sizeof ld);
+    replyf("fw=" RIOTKVM_FW_VERSION " name=RiotKVM proto=" RIOTKVM_STR(RIOTKVM_BLE_PROTO) " mode=%c led=%s rst=%d crashes=%lu safe=%d ble_started=%d [%s] build=\"%s %s\" sd_mb=%lu boot_sd_ms=%lu boot_usb_ms=%lu sd_init_ms=%lu ui_t0=%lu ui_splash_ms=%lu ui_frame_us_max=%lu cfg_len=%u n_itf=%u",
+           kvmmode::letter(), ld, (int)rstReason, (unsigned long)crashCount, safeMode ? 1 : 0, bleStarted ? 1 : 0, bd, __DATE__, __TIME__,
            (unsigned long)(sdmsc::sectors() / 2048), (unsigned long)bootSdMs, (unsigned long)bootUsbMs, (unsigned long)sdmsc::initMs(),
            (unsigned long)ui::firstFrameMs(), (unsigned long)ui::splashMs(), (unsigned long)ui::frameUsMax(),
            cd ? cd[2] | (cd[3] << 8) : 0, cd ? cd[4] : 0);
@@ -247,6 +267,7 @@ void setup() {
   cdc->onEvent(ARDUINO_USB_CDC_LINE_STATE_EVENT, cdcEvent);
   USB.onEvent(usbEvent);
   kvmmode::load();
+  ledcfg::load();
   USB.PID(kvmmode::pid());           // un PID por modo: Windows no mezcla drivers
   USB.usbAttributes(TUSB_DESC_CONFIG_ATT_SELF_POWERED | TUSB_DESC_CONFIG_ATT_REMOTE_WAKEUP);
 
@@ -287,6 +308,7 @@ void loop() {
   pump();
   button();
   kvmmode::service();
+  ledcfg::service();
   sdmsc::consumeChange();
   if (!bleStarted && !safeMode && millis() >= BLE_START_DELAY_MS) { bleStarted = true; blelink::begin(loopTask); }
   if (millis() > 10000 && crashCount) crashCount = 0;   // arranque estable

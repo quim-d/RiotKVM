@@ -3,6 +3,7 @@
 #include "hid_dev.h"
 #include "sd_msc.h"
 #include "kvm_mode.h"
+#include "led_cfg.h"
 #include "tusb.h"
 #include "esp_timer.h"
 #include "nimble/nimble_port.h"
@@ -25,7 +26,7 @@ constexpr size_t MAXW = 253;  // ATT_MTU preferido 256 - 3
 
 // op de CMD
 enum : uint8_t { OP_KEY_DOWN = 1, OP_KEY_UP, OP_RELEASE_ALL, OP_MOUSE_REL, OP_MOUSE_ABS, OP_BTN_REL, OP_BTN_ABS, OP_WHEEL,
-                 OP_PING = 0x10, OP_GET_STATE, OP_SET_MODE };
+                 OP_PING = 0x10, OP_GET_STATE, OP_SET_MODE, OP_SET_LED };
 // op de EVT
 enum : uint8_t { EV_STATE = 0x81, EV_PONG, EV_ERR };
 enum : uint8_t { E_BUSY = 1, E_RANGE, E_UNKNOWN_OP, E_MALFORMED, E_NO_HOST, E_NO_HID, E_BOOT_PROTO, E_ROLLOVER };
@@ -175,6 +176,10 @@ void execute(const uint8_t* d, size_t n) {
         if (len != 1) { err = E_MALFORMED; break; }
         if (!kvmmode::request(p[0])) err = E_RANGE;
         break;
+      case OP_SET_LED:   // mode, r, g, b, bright (sin respuesta; el estado se lee en INFO [8..12])
+        if (len != 5) { err = E_MALFORMED; break; }
+        if (!ledcfg::set(ledcfg::Cfg{p[0], p[1], p[2], p[3], p[4]})) err = E_RANGE;
+        break;
       default:
         st.unknown++; err = E_UNKNOWN_OP; break;
     }
@@ -201,8 +206,10 @@ int chrAccess(uint16_t conn, uint16_t, struct ble_gatt_access_ctxt* ctxt, void* 
     return 0;
   }
   if (which == 4 && ctxt->op == BLE_GATT_ACCESS_OP_READ_CHR) {    // INFO
-    uint16_t caps = 0x01 | 0x02 | 0x04 | 0x08 | 0x10 | 0x20;
-    uint8_t b[8] = {PROTO_VER, FW_MAJOR, FW_MINOR, kvmmode::current(), (uint8_t)caps, (uint8_t)(caps >> 8), FW_PATCH, 0};
+    uint16_t caps = 0x01 | 0x02 | 0x04 | 0x08 | 0x10 | 0x20 | 0x40;   // bit6 = SET_LED
+    ledcfg::Cfg l = ledcfg::get();
+    uint8_t b[13] = {PROTO_VER, FW_MAJOR, FW_MINOR, kvmmode::current(), (uint8_t)caps, (uint8_t)(caps >> 8), FW_PATCH, 0,
+                     l.mode, l.r, l.g, l.b, l.bright};
     return os_mbuf_append(ctxt->om, b, sizeof b) == 0 ? 0 : BLE_ATT_ERR_INSUFFICIENT_RES;
   }
   return BLE_ATT_ERR_UNLIKELY;

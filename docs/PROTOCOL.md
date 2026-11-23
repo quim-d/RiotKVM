@@ -18,7 +18,7 @@ Estado: **etapa 1** (solo CDC de texto). El protocolo BLE binario versionado se 
 | `ma x y [rueda]` | Ratón absoluto, x,y recortados a 0..32767 (un informe absoluto (0,0) sin botones se envia como x=1: Windows descarta el todo-cero) | `ok` / `err ...` |
 | `mbr mask` / `mba mask` | Botones del ratón relativo / absoluto (bits 0..4; > 0x1F -> `err range`) | `ok` / `err ...` |
 | `status` | `host=<0/1 enumerado> leds=0xNN hidready=<0/1> susp=<0/1> proto=<boot/report> sd=<0/1> mode=<A/B/C> ble=<0/1> mtu=N ble_itvl_ms=X` | linea |
-| `info` | `fw=X.Y.Z name=RiotKVM proto=1 mode= rst= crashes= safe= ble_started= [diag BLE] build="..." sd_mb= boot_sd_ms= boot_usb_ms= sd_init_ms= cfg_len= n_itf=` (`fw=` es la version semver del firmware, de `src/version.h`; firmwares anteriores al versionado respondian `fw=etapa2`; `proto=` es la version del protocolo BLE; `rst` = esp_reset_reason; `safe=1` = BLE desactivado tras 2 caidas) | linea |
+| `info` | `fw=X.Y.Z name=RiotKVM proto=1 mode= led= rst= crashes= safe= ble_started= [diag BLE] build="..." sd_mb= boot_sd_ms= boot_usb_ms= sd_init_ms= cfg_len= n_itf=` (`fw=` es la version semver del firmware, de `src/version.h`; firmwares anteriores al versionado respondian `fw=etapa2`; `proto=` es la version del protocolo BLE; `led=` el ajuste de la luz, como `led` (desde 1.2.0); `rst` = esp_reset_reason; `safe=1` = BLE desactivado tras 2 caidas) | linea |
 | `stats` / `stats reset` | Contadores (dos lineas): HID (`cmd_*`: desde el evento RX hasta que termina el envio; `snd_*`: duracion de la llamada tud_hid_n_report (envio sin espera, desde la etapa de latencia)) y SD (`sd_*`) | lineas / `ok` |
 | `rep` | Diagnostico HID: por ID de informe (1 teclado, 2 raton rel, 3 raton abs) `idN n=<enviados> fail=<fallos> last=<ultimos bytes en hex, sin el ID>`. ID3: byte0 = botones (bits 0..4), luego X (u16 LE), Y (u16 LE), rueda, pan. `stats reset` lo pone a cero | linea |
 | `lat` | Latencia interna del dongle en us, UNA linea: `queue n= avg= max= h=b0,..,b7 deliver n= avg= max= h=...`. `queue` = recepcion (evento RX CDC o escritura BLE) -> inicio de ejecucion; `deliver` = recepcion -> fin de la transferencia IN del informe HID (el host ya lo leyo; incluye hasta 1 ms de sondeo USB). Buckets (us): <250,<500,<1000,<2000,<4000,<8000,<16000,>=16000. `stats reset` tambien la pone a cero. Solo cuentan `kd/ku/mm/ma/mbr/mba` por CDC y escrituras BLE (no `type`) | linea |
@@ -26,6 +26,7 @@ Estado: **etapa 1** (solo CDC de texto). El protocolo BLE binario versionado se 
 | `ble want MIN [MAX]` | Intervalo de conexion pedido (unidades de 1,25 ms; 6 = 7,5 ms) | `ok` / `err range` |
 | `ble slowadv 0\|1` | Anuncio lento (400-500 ms) mientras hay cliente (por defecto 1) | `ok` |
 | `mode [a\|b\|c]` | Sin argumento: `mode=X`. Con argumento: `ok` y el dongle guarda el modo en NVS, suelta todo y se reinicia (otro PID, otro COM) | `ok` |
+| `led` / `led auto` / `led off` / `led RRGGBB [brillo]` | Luz (LED RGB APA102). Sin argumento: `led=auto\|off\|RRGGBB@NN`. `auto` = color segun el estado (modo, BLE, fallo de SD: el de siempre); `RRGGBB` (hex, admite `#`) = color fijo con brillo 0..100 % (sin brillo se conserva el anterior; defecto 35, el brillo de `auto`); `off` = apagado. Se aplica al momento y se guarda en NVS tras 1 s sin cambios. Desde firmware 1.2.0 (antes: `err unknown`) | `ok` / `err args` / `err range` |
 | `reboot` | Suelta todo y reinicia | `ok` |
 | `heap`, `log`, `coredump` | Depuracion: memoria libre, trazas ESP_LOG en RTC, resumen del ultimo panic (pc + backtrace, decodificar con addr2line) | lineas |
 | `ble kick` / `ble start` | Depuracion: desconecta al cliente BLE / arranca BLE si estaba en safe | `ok` |
@@ -88,6 +89,7 @@ Una escritura (o notificacion) es una **secuencia de registros** concatenados, s
 | 0x10 | PING | 2 | `seq:u16` | Responde EVT PONG con el mismo `seq` |
 | 0x11 | GET_STATE | 0 | - | Responde EVT STATE |
 | 0x12 | SET_MODE | 1 | `mode:u8` (0=A, 1=B, 2=C) | Cambia el modo USB (ver abajo): guarda en NVS, suelta todo y **reinicia el dongle** (USB se re-enumera con otro PID y la conexion BLE se corta; el cliente debe reconectar) |
+| 0x13 | SET_LED | 5 | `mode:u8, r:u8, g:u8, b:u8, bright:u8` | Luz: `mode` 0 = auto (color segun estado), 1 = color fijo `r,g,b` al `bright` % (0..100), 2 = apagado (en auto/apagado `r,g,b,bright` se guardan igual: son el color fijo para la proxima vez). `mode > 2` o `bright > 100` -> ERR RANGE. Sin respuesta (como SET_MODE); el estado se lee en INFO [8..12]. Firmware 1.2.0+ (INFO caps bit6); uno anterior responde ERR UNKNOWN_OP y el cliente lo muestra como "el firmware no admite control de la luz: actualizalo" |
 
 El estado de teclas/botones es **persistente en el dongle** (KEY_DOWN deja la tecla pulsada hasta KEY_UP/RELEASE_ALL/desconexion). Maximo 6 teclas no modificadoras a la vez.
 
@@ -104,18 +106,21 @@ Modos: **A** = solo SD (MSC), **B** = solo teclado+ratones HID, **C** = ambos. E
 STATE se envia al suscribirse, ante GET_STATE y **cada vez que cambia** algo de lo anterior (agrupado, como mucho cada ~20 ms).
 Codigos ERR: 1 `BUSY` (informe perdido: endpoint ocupado/host suspendido que no despierta), 2 `RANGE`, 3 `UNKNOWN_OP`, 4 `MALFORMED`, 5 `NO_HOST` (USB no enumerado), 6 `NO_HID` (modo sin HID), 7 `BOOT_PROTO` (raton en boot protocol), 8 `ROLLOVER` (mas de 6 teclas).
 
-## INFO (lectura, 8 bytes)
+## INFO (lectura, 8 bytes; 13 desde firmware 1.2.0)
 ```
 [0] proto_version = 1
 [1] fw_major   [2] fw_minor
 [3] mode       (0=A,1=B,2=C)
-[4..5] caps u16: bit0 teclado, bit1 raton rel, bit2 raton abs, bit3 MSC/SD, bit4 SET_MODE, bit5 PING
+[4..5] caps u16: bit0 teclado, bit1 raton rel, bit2 raton abs, bit3 MSC/SD, bit4 SET_MODE, bit5 PING, bit6 SET_LED
 [6] fw_patch
 [7] reservado (0)
+[8] led_mode (0 auto, 1 fijo, 2 apagado)   [9] r  [10] g  [11] b  [12] bright (0..100)    <- solo 1.2.0+
 ```
 Se puede leer en cualquier momento (no hace falta suscribirse).
 
 Version del firmware = `fw_major.fw_minor.fw_patch` (semver, fuente unica `src/version.h`). `fw_patch` ocupa el byte [6], antes "reservado (0)": es compatible con proto=1 porque los clientes anteriores solo leen [0..5], y un firmware anterior lo deja a 0 (se lee como `X.Y.0`: los anteriores al versionado anunciaban 1.0, es decir `1.0.0`; por eso la primera version semver es 1.1.0). No sube `proto_version`. Los clientes deben seguir ignorando el byte [7] y aceptar INFO de mas de 8 bytes.
+
+Luz (firmware 1.2.0): INFO crece a 13 bytes con el ajuste en [8..12] y caps bit6; tampoco sube `proto_version` (SET_LED es una orden nueva y opcional: un cliente viejo nunca la envia, y un firmware viejo la salta con UNKNOWN_OP). Decisiones: en color fijo el fallo de SD **no** pinta el LED de rojo (es eleccion del usuario; el fallo sigue en la pantalla y en STATE/`status`); un cambio de ajuste se pinta al momento aunque haya actividad HID (el resto de la UI espera al silencio); NVS se escribe tras 1 s sin cambios para que arrastrar el brillo no gaste flash.
 
 ## Orden de peticiones recomendado para el cliente
 1. Escanear por UUID de servicio (o nombre `RiotKVM` (antes `QKVM` y `QuimKVM`; el UUID no cambia, el cliente busca por UUID)); conectar; negociar MTU (247).
