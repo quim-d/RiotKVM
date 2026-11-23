@@ -6,6 +6,19 @@
 
 ![RiotKVM](docs/ui/gui_riotkvm.png)
 
+## Pensado para que lo maneje una IA
+
+RiotKVM está diseñado para que **un agente de IA controle una máquina física**, no solo una persona. El servidor MCP (`riotkvm-mcp`) le da a un LLM como Claude ojos y manos sobre el equipo: **ve la pantalla** con la capturadora y **teclea y mueve el ratón** a través del dongle, igual que lo haría alguien sentado delante.
+
+Así un agente puede hacer lo que no se puede por SSH ni RDP:
+
+- entrar en la BIOS/UEFI, cambiar el orden de arranque o activar la virtualización;
+- arrancar desde la microSD e instalar un sistema operativo de principio a fin;
+- rescatar un equipo colgado o sin red desde la consola;
+- seguir un procedimiento paso a paso y comprobar cada paso con una captura.
+
+El bucle es siempre **captura → decidir → actuar → captura para verificar**. El MCP usa *Code Mode*: el modelo escribe JavaScript contra la API `riotkvm` (`screenshot`, `type`, `key`, `mouse`, `led`…) dentro de un sandbox con plazos, cancelación y una lista blanca de comandos, así que agrupa varias acciones en una sola llamada sin acceso al portátil. La persona sigue al mando: el agente debe pedir confirmación antes de cualquier acción irreversible (borrar discos, guardar la BIOS, reinstalar o apagar).
+
 ## Cómo funciona
 
 ```
@@ -63,6 +76,8 @@ Los binarios no están firmados: en macOS, la primera vez clic derecho → Abrir
 ```sh
 claude mcp add riotkvm -- /ruta/a/riotkvm-mcp
 ```
+
+Después basta con pedírselo en lenguaje natural, por ejemplo: *«entra en la BIOS del servidor y pon la microSD como primer arranque»* o *«instala Fedora desde la SD con el disco entero»*.
 
 ## Uso rápido
 
