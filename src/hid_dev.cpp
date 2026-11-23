@@ -123,7 +123,11 @@ int64_t stamp() { int64_t t = g_rx; return t ? t : esp_timer_get_time(); }
 
 Res kbdPush() {
   Res r = gate(); if (r != H_OK) return r;
-  if (kq.full()) { st.failed++; return H_BUSY; }
+  if (kq.full()) {  // cola llena: el ultimo pendiente pasa a ser el estado actual. Se pierde un toque intermedio (BUSY
+                    // avisa al cliente), pero el host acaba viendo el estado real: una suelta no se queda sin enviar.
+    KRep& e = kq.tail(); e.d[0] = kMods; memcpy(e.d + 2, kKeys, 6);
+    st.failed++; drain(); return H_BUSY;
+  }
   KRep& e = kq.push(); memset(e.d, 0, 8); e.d[0] = kMods; memcpy(e.d + 2, kKeys, 6); e.t = stamp();
   drain();
   return H_OK;
