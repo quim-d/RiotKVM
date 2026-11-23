@@ -16,7 +16,7 @@ Junto con una capturadora HDMI→USB en el portátil, es un "RDP de bolsillo" pa
 
 | Ruta | Qué es |
 |---|---|
-| `src/` | Firmware (Arduino-ESP32 3.x / pioarduino, TinyUSB, NimBLE, LovyanGFX) |
+| `src/` | Firmware (Arduino-ESP32 4.0 / pioarduino 61.04.00, TinyUSB, NimBLE, LovyanGFX). Versión en `src/version.h` |
 | `variants/tdongle_s3/` | Variante de placa con VID/PID propios (1209:0001) |
 | `platformio.ini` | Proyecto PlatformIO |
 | `tools/flash.py` | Flashea un `firmware.factory.bin`: envía `bootloader` por CDC y escribe con `esptool` |
@@ -32,6 +32,10 @@ python tools\flash.py .pio\build\tdongle-s3\firmware.factory.bin
 ```
 
 El script pone el dongle en modo descarga con el comando serie `bootloader` y flashea con `esptool` (el error final de pySerial es normal: el puerto desaparece al reiniciar). Si el dongle no responde, enchúfalo con el botón BOOT pulsado y usa `python -m esptool --port COMx --after watchdog-reset write-flash 0x0 .pio\build\tdongle-s3\firmware.factory.bin`.
+
+### Versión del firmware
+
+La versión (semver) está **solo** en `src/version.h` (`QKVM_FW_MAJOR/MINOR/PATCH`); el dongle la publica en `info` por CDC (`fw=X.Y.Z`) y en INFO por BLE. Es independiente de la del cliente (`client/Cargo.toml`). Al etiquetar `vX.Y.Z`, el CI compila el firmware y lo adjunta a la release como `qkvm-fw-<versión>.factory.bin` (el mismo `firmware.factory.bin` que usa `tools/flash.py`), junto con `manifest.json`: versión del cliente, versión del firmware, `proto`, nombre del asset y su SHA-256.
 
 ## BLE
 

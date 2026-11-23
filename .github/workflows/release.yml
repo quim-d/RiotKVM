@@ -190,10 +190,67 @@ jobs:
           path: dist/*
           if-no-files-found: error
 
+  firmware:
+    name: Firmware ESP32-S3 (factory.bin)
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: . # el firmware (platformio.ini, src/) está en la raíz del repo, no en client/
+    outputs:
+      version: ${{ steps.ver.outputs.v }}
+      proto: ${{ steps.ver.outputs.proto }}
+      asset: ${{ steps.ver.outputs.asset }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # La versión del firmware es independiente de la del cliente: sale de src/version.h (única fuente de verdad).
+      - name: Versión del firmware
+        id: ver
+        run: |
+          def() { sed -n "s/^#define QKVM_$1 \([0-9][0-9]*\)[[:space:]]*$/\1/p" src/version.h; }
+          V="$(def FW_MAJOR).$(def FW_MINOR).$(def FW_PATCH)"
+          P="$(def BLE_PROTO)"
+          if ! echo "$V" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' || [ -z "$P" ]; then
+            echo "::error::no se pudo leer la versión de src/version.h (fw=$V proto=$P)"; exit 1
+          fi
+          N="$V"; [ "$GITHUB_REF_TYPE" = "tag" ] || N="$V-dev"
+          { echo "v=$V"; echo "proto=$P"; echo "asset=qkvm-fw-$N.factory.bin"; } >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # Plataforma, toolchain y librerías (cientos de MB): la clave cambia si cambia platformio.ini (p. ej. otra versión
+      # de la plataforma pioarduino, que va fijada allí).
+      - uses: actions/cache@v4
+        with:
+          path: ~/.platformio
+          key: pio-${{ runner.os }}-${{ hashFiles('platformio.ini') }}
+
+      - name: PlatformIO
+        run: pip install platformio==6.2.0
+
+      - name: Compilar
+        run: pio run -e tdongle-s3
+
+      # firmware.factory.bin (bootloader + particiones + app desde 0x0) es el que escribe tools/flash.py
+      - name: Empaquetar
+        run: |
+          mkdir -p dist
+          cp .pio/build/tdongle-s3/firmware.factory.bin "dist/${{ steps.ver.outputs.asset }}"
+          ls -l dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: firmware
+          path: dist/*
+          if-no-files-found: error
+
   release:
     name: Crear release
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [linux, windows, macos]
+    needs: [linux, windows, macos, firmware]
     runs-on: ubuntu-22.04
     permissions:
       contents: write # solo este job puede crear la release
@@ -202,6 +259,29 @@ jobs:
         with:
           path: dist
           merge-multiple: true
+
+      # manifest.json: lo que lee el comprobador de versiones de la GUI con una sola petición
+      # (releases/latest -> asset manifest.json). La etiqueta ya la validaron los jobs contra client/Cargo.toml.
+      - name: manifest.json
+        working-directory: dist
+        env:
+          FW_VERSION: ${{ needs.firmware.outputs.version }}
+          FW_PROTO: ${{ needs.firmware.outputs.proto }}
+          FW_ASSET: ${{ needs.firmware.outputs.asset }}
+        run: |
+          test -f "$FW_ASSET" || { echo "::error::falta $FW_ASSET"; exit 1; }
+          jq -n \
+            --arg tag "$GITHUB_REF_NAME" \
+            --arg client "${GITHUB_REF_NAME#v}" \
+            --arg fw "$FW_VERSION" \
+            --argjson proto "$FW_PROTO" \
+            --arg asset "$FW_ASSET" \
+            --arg sha "$(sha256sum -- "$FW_ASSET" | cut -d' ' -f1)" \
+            --argjson size "$(stat -c %s -- "$FW_ASSET")" \
+            --arg url "https://github.com/$GITHUB_REPOSITORY/releases/download/$GITHUB_REF_NAME/$FW_ASSET" \
+            '{schema: 1, tag: $tag, client: {version: $client},
+              firmware: {version: $fw, proto: $proto, asset: $asset, sha256: $sha, size: $size, url: $url}}' > manifest.json
+          cat manifest.json
 
       - name: SHA256
         working-directory: dist
