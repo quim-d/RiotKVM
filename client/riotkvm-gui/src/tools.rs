@@ -1,4 +1,7 @@
-//! Ventana «Herramientas»: flashear el firmware del dongle y preparar una microSD con Ventoy.
+//! Ventana «Herramientas»: nombre y firmware del dongle, y preparar una microSD con Ventoy.
+//!
+//! El nombre va por la sesión (BLE o serie): `app.rs` le pasa `Event::Name`/enlace con [`Tools::on_name`] /
+//! [`Tools::on_link`] y recoge lo que el usuario guarda con [`Tools::take_rename`] (lo manda como `Cmd::SetName`).
 //!
 //! Toda la lógica está en `riotkvm-flash`; aquí solo la UI. Cada trabajo largo corre en un hilo propio y manda
 //! mensajes por canal (mismo patrón que la enumeración de cámaras de `app.rs`); la UI se repinta al recibirlos.
@@ -62,6 +65,17 @@ struct Job {
     writing: bool,
 }
 
+/// Nombre del dongle según la sesión.
+#[derive(Debug, Clone, Default, PartialEq)]
+enum DongleName {
+    /// Sin enlace o aún sin leer.
+    #[default]
+    Unknown,
+    /// Firmware anterior a 1.3.0.
+    Unsupported,
+    Known(String),
+}
+
 #[derive(Default)]
 pub struct Tools {
     pub open: bool,
@@ -69,6 +83,10 @@ pub struct Tools {
     tab: Tab,
     tx: Option<Sender<Msg>>,
     rx: Option<Receiver<Msg>>,
+    // nombre del dongle
+    name: DongleName,
+    name_edit: String,
+    rename: Option<String>,
     // firmware
     checking: bool,
     installed: Option<Installed>,
@@ -91,6 +109,61 @@ pub struct Tools {
 }
 
 impl Tools {
+    /// Nombre leído o recién puesto (`Event::Name`); `None` = el firmware no admite renombrar.
+    pub fn on_name(&mut self, n: Option<String>) {
+        if let Some(v) = &n {
+            self.name_edit = v.clone();
+        }
+        self.name = n.map(DongleName::Known).unwrap_or(DongleName::Unsupported);
+    }
+
+    /// Cambio de enlace: sin conexión el nombre deja de ser conocido.
+    pub fn on_link(&mut self, connected: bool) {
+        if !connected {
+            self.name = DongleName::Unknown;
+        }
+    }
+
+    /// Nombre del dongle conectado, si se conoce (para la barra de estado).
+    pub fn dongle_name(&self) -> Option<&str> {
+        match &self.name {
+            DongleName::Known(n) => Some(n),
+            _ => None,
+        }
+    }
+
+    /// Nombre que el usuario acaba de guardar (ya validado), para mandarlo como `Cmd::SetName`.
+    pub fn take_rename(&mut self) -> Option<String> {
+        self.rename.take()
+    }
+
+    fn ui_name(&mut self, ui: &mut egui::Ui) {
+        ui.label("Nombre:");
+        match self.name.clone() {
+            DongleName::Unknown => {
+                ui.colored_label(theme::GRIS, "sin conexión");
+            }
+            DongleName::Unsupported => {
+                ui.colored_label(theme::GRIS, "actualiza el firmware (1.3.0+) para renombrarlo");
+            }
+            DongleName::Known(cur) => {
+                ui.horizontal(|ui| {
+                    let r = ui.add(egui::TextEdit::singleline(&mut self.name_edit).char_limit(riotkvm_core::name::MAX_LEN).desired_width(160.0));
+                    let v = riotkvm_core::name::validate(&self.name_edit);
+                    let (changed, bad) = (v.as_ref().is_ok_and(|n| *n != cur), v.is_err());
+                    let enter = r.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
+                    let b = ui.add_enabled(changed, egui::Button::new("Guardar"));
+                    if changed && (b.clicked() || enter) {
+                        self.rename = v.ok();
+                    }
+                    if bad && !self.name_edit.trim().is_empty() {
+                        ui.colored_label(theme::AMBAR, "A-Z 0-9 . _ - (máx. 20)");
+                    }
+                });
+            }
+        }
+        ui.end_row();
+    }
     /// Un solo canal para todos los hilos (consultas y trabajos), creado la primera vez.
     fn chan(&mut self, ctx: &egui::Context) -> ChanRep {
         if self.tx.is_none() {
@@ -296,6 +369,7 @@ impl Tools {
     fn ui_firmware(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
         let busy = self.job.is_some();
         egui::Grid::new("fw").num_columns(2).spacing([12.0, 6.0]).show(ui, |ui| {
+            self.ui_name(ui);
             ui.label("Instalada:");
             ui.label(match &self.installed {
                 Some(i) => i.describe(),
