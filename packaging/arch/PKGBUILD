@@ -8,7 +8,7 @@ replaces=('quim-dkvm')
 provides=('quim-dkvm')
 pkgver=0.2.0   # súbelo a la primera release con los crates riotkvm-* (las anteriores se llaman dkvm-*)
 pkgrel=1
-pkgdesc='RiotKVM: KVM de bolsillo (CLI riotkvm y GUI riotkvm-gui) para el dongle ESP32-S3'
+pkgdesc='RiotKVM: KVM de bolsillo (CLI riotkvm, GUI riotkvm-gui y servidor MCP riotkvm-mcp) para el dongle ESP32-S3'
 arch=('x86_64' 'aarch64')
 url="https://github.com/${_owner}/RiotKVM"
 license=('custom')   # sin LICENSE definida todavía: cambia por la elegida
@@ -28,7 +28,7 @@ build() {
   cd "$srcdir/RiotKVM-$pkgver/client"
   export RUSTUP_TOOLCHAIN=stable
   export CARGO_TARGET_DIR=target
-  cargo build --release --frozen -p riotkvm-cli -p riotkvm-gui
+  cargo build --release --frozen -p riotkvm-cli -p riotkvm-gui -p riotkvm-mcp
   mkdir -p target/completions
   target/release/riotkvm completion bash > target/completions/riotkvm.bash
   target/release/riotkvm completion zsh > target/completions/_riotkvm
@@ -38,13 +38,14 @@ build() {
 check() {
   cd "$srcdir/RiotKVM-$pkgver/client"
   export RUSTUP_TOOLCHAIN=stable
-  cargo test --release --frozen -p riotkvm-core -p riotkvm-cli
+  cargo test --release --frozen -p riotkvm-core -p riotkvm-cli -p riotkvm-mcp
 }
 
 package() {
   cd "$srcdir/RiotKVM-$pkgver"
   install -Dm755 client/target/release/riotkvm     "$pkgdir/usr/bin/riotkvm"
   install -Dm755 client/target/release/riotkvm-gui "$pkgdir/usr/bin/riotkvm-gui"
+  install -Dm755 client/target/release/riotkvm-mcp "$pkgdir/usr/bin/riotkvm-mcp"
   install -Dm644 client/target/completions/riotkvm.bash "$pkgdir/usr/share/bash-completion/completions/riotkvm"
   install -Dm644 client/target/completions/_riotkvm     "$pkgdir/usr/share/zsh/site-functions/_riotkvm"
   install -Dm644 client/target/completions/riotkvm.fish "$pkgdir/usr/share/fish/vendor_completions.d/riotkvm.fish"

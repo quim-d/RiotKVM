@@ -38,6 +38,7 @@ recommends = "v4l-utils"
 assets = [
     ["../target/release/riotkvm", "usr/bin/riotkvm", "755"],
     ["../target/release/riotkvm-gui", "usr/bin/riotkvm-gui", "755"],
+    ["../target/release/riotkvm-mcp", "usr/bin/riotkvm-mcp", "755"],
     ["../target/completions/riotkvm.bash", "usr/share/bash-completion/completions/riotkvm", "644"],
     ["../target/completions/_riotkvm", "usr/share/zsh/vendor-completions/_riotkvm", "644"],
     ["../target/completions/riotkvm.fish", "usr/share/fish/vendor_completions.d/riotkvm.fish", "644"],
@@ -52,6 +53,7 @@ url = "https://github.com/quim-d/RiotKVM"
 assets = [
     { source = "../target/release/riotkvm", dest = "/usr/bin/riotkvm", mode = "755" },
     { source = "../target/release/riotkvm-gui", dest = "/usr/bin/riotkvm-gui", mode = "755" },
+    { source = "../target/release/riotkvm-mcp", dest = "/usr/bin/riotkvm-mcp", mode = "755" },
     { source = "../target/completions/riotkvm.bash", dest = "/usr/share/bash-completion/completions/riotkvm", mode = "644" },
     { source = "../target/completions/_riotkvm", dest = "/usr/share/zsh/site-functions/_riotkvm", mode = "644" },
     { source = "../target/completions/riotkvm.fish", dest = "/usr/share/fish/vendor_completions.d/riotkvm.fish", mode = "644" },
