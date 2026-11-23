@@ -230,6 +230,23 @@ impl GattConnector for NativeConnector {
     }
 }
 
+/// Tipo de escritura en CMD. macOS: CON respuesta. Medido el 22/11/2026: tras una ráfaga de movimiento, btleplug 0.13
+/// encola la escritura SIN respuesta esperando `peripheralIsReadyToSendWriteWithoutResponse` y ese aviso no llega: el
+/// enlace se queda mudo (clics y teclas encolados que nunca salen). La escritura con respuesta no usa esa cola.
+/// El firmware acepta las dos (`BLE_GATT_CHR_F_WRITE_NO_RSP | BLE_GATT_CHR_F_WRITE`). `DKVM_BLE_WRITE=norsp|rsp` fuerza una.
+fn write_type() -> WriteType {
+    static T: std::sync::OnceLock<WriteType> = std::sync::OnceLock::new();
+    *T.get_or_init(|| match std::env::var("DKVM_BLE_WRITE").as_deref() {
+        Ok("rsp") => WriteType::WithResponse,
+        Ok("norsp") => WriteType::WithoutResponse,
+        _ if cfg!(target_os = "macos") => WriteType::WithResponse,
+        _ => WriteType::WithoutResponse,
+    })
+}
+
+/// Plazo de una escritura GATT (sin respuesta lo normal es < 1 ms; con respuesta, un par de intervalos de conexión).
+const WRITE_TIMEOUT: Duration = Duration::from_millis(1000);
+
 pub struct NativeLink {
     rt: Arc<Runtime>,
     p: Peripheral,
@@ -315,17 +332,26 @@ impl GattLink for NativeLink {
         self.mtu
     }
     fn write_cmd(&mut self, data: &[u8]) -> Result<()> {
-        self.rt.block_on(self.p.write(&self.cmd, data, WriteType::WithoutResponse)).map_err(|e| ble_err("escribir CMD", e))
+        // macOS (btleplug/CoreBluetooth): si el periférico no está listo, la escritura sin respuesta se encola hasta el aviso
+        // `peripheralIsReadyToSendWriteWithoutResponse`, que no llega nunca si el dongle se ha ido. Sin plazo, el hilo BLE
+        // se quedaba bloqueado para siempre (y al cerrar la GUI, `Session::drop` -> `join` colgaba el proceso).
+        match self.rt.block_on(async { tokio::time::timeout(WRITE_TIMEOUT, self.p.write(&self.cmd, data, write_type())).await }) {
+            Ok(r) => r.map_err(|e| ble_err("escribir CMD", e)),
+            Err(_) => Err(Error::Transport(format!("escribir CMD: sin respuesta de Bluetooth en {} ms (¿dongle desconectado?)", WRITE_TIMEOUT.as_millis()))),
+        }
     }
     fn read_info(&mut self) -> Result<Vec<u8>> {
         let chars = self.p.characteristics();
         let info = chars.iter().find(|c| c.uuid == chr(INFO_UUID)).cloned().ok_or_else(|| Error::Transport("sin característica INFO".into()))?;
-        self.rt.block_on(self.p.read(&info)).map_err(|e| ble_err("leer INFO", e))
+        match self.rt.block_on(async { tokio::time::timeout(Duration::from_secs(3), self.p.read(&info)).await }) {
+            Ok(r) => r.map_err(|e| ble_err("leer INFO", e)),
+            Err(_) => Err(Error::Transport("leer INFO: sin respuesta de Bluetooth en 3 s".into())),
+        }
     }
     fn disconnect(&mut self) {
         for t in self.tasks.drain(..) {
             t.abort();
         }
-        let _ = self.rt.block_on(self.p.disconnect());
+        let _ = self.rt.block_on(async { tokio::time::timeout(Duration::from_secs(2), self.p.disconnect()).await });
     }
 }

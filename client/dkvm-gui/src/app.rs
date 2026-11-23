@@ -554,7 +554,7 @@ impl App {
         }
         let rel = self.mode == MouseMode::Relative;
         ctx.send_viewport_cmd(egui::ViewportCommand::CursorVisible(!(on && rel)));
-        ctx.send_viewport_cmd(egui::ViewportCommand::CursorGrab(if on && rel { egui::CursorGrab::Confined } else { egui::CursorGrab::None }));
+        ctx.send_viewport_cmd(egui::ViewportCommand::CursorGrab(grab_mode(on && rel)));
     }
 
     fn drain_events(&mut self) {
@@ -637,6 +637,13 @@ impl App {
     }
 
     fn handle_input(&mut self, ctx: &egui::Context, img: Rect, hovered_video: bool, clicked_video: bool) {
+        if dlog::enabled() {
+            for e in ctx.input(|i| i.events.clone()) {
+                if let egui::Event::PointerButton { pos, button, pressed, .. } = e {
+                    dlog!("ventana: botón {button:?} {} en {pos:?} (captura={}, vídeo={img:?})", if pressed { "down" } else { "up" }, self.captured);
+                }
+            }
+        }
         if self.hook_ok && hook::take_paste() {
             self.paste_clipboard();
         }
@@ -877,7 +884,7 @@ impl eframe::App for App {
                         self.rel_acc = Vec2::ZERO;
                         let rel = self.mode == MouseMode::Relative;
                         ctx.send_viewport_cmd(egui::ViewportCommand::CursorVisible(!rel));
-                        ctx.send_viewport_cmd(egui::ViewportCommand::CursorGrab(if rel { egui::CursorGrab::Confined } else { egui::CursorGrab::None }));
+                        ctx.send_viewport_cmd(egui::ViewportCommand::CursorGrab(grab_mode(rel)));
                     }
                 }
                 ui.separator();
@@ -1249,5 +1256,18 @@ mod tests {
         assert_eq!(egui_hid(Key::F5), Some(0x3E));
         assert_eq!(egui_hid(Key::ArrowUp), Some(0x52));
         assert_eq!(egui_hid(Key::Delete), Some(0x4C));
+    }
+}
+
+/// Modo de captura del cursor en modo relativo. macOS (winit) NO admite `Confined` (devuelve `NotSupported` y el
+/// cursor sigue moviéndose por el escritorio local): allí se usa `Locked`, que lo deja quieto y sigue entregando
+/// los desplazamientos crudos (`MouseMoved`). En Windows y Linux se mantiene `Confined`, que ya funcionaba.
+fn grab_mode(on: bool) -> egui::CursorGrab {
+    if !on {
+        egui::CursorGrab::None
+    } else if cfg!(target_os = "macos") {
+        egui::CursorGrab::Locked
+    } else {
+        egui::CursorGrab::Confined
     }
 }

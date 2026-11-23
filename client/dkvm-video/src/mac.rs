@@ -169,6 +169,20 @@ unsafe fn apply(dev: *mut Object, o: &Offer) -> Result<(), String> {
     res
 }
 
+/// `videoSettings` de la salida: siempre BGRA; con `w`/`h` > 0 fija además el tamaño de los cuadros.
+unsafe fn output_settings(w: u32, h: u32) -> *mut Object {
+    let d: *mut Object = msg_send![class!(NSMutableDictionary), dictionary];
+    let num: *mut Object = msg_send![class!(NSNumber), numberWithUnsignedInt: BGRA];
+    let _: () = msg_send![d, setObject: num forKey: nsstr("PixelFormatType")]; // kCVPixelBufferPixelFormatTypeKey
+    if w > 0 && h > 0 {
+        let nw: *mut Object = msg_send![class!(NSNumber), numberWithUnsignedInt: w];
+        let nh: *mut Object = msg_send![class!(NSNumber), numberWithUnsignedInt: h];
+        let _: () = msg_send![d, setObject: nw forKey: nsstr("Width")]; // kCVPixelBufferWidthKey
+        let _: () = msg_send![d, setObject: nh forKey: nsstr("Height")]; // kCVPixelBufferHeightKey
+    }
+    d
+}
+
 fn open(index: usize, want: (u32, u32, u32)) -> Result<Cam, String> {
     guard("abrir cámara (AVFoundation)", || open_inner(index, want))?
 }
@@ -198,17 +212,16 @@ fn open_inner(index: usize, want: (u32, u32, u32)) -> Result<Cam, String> {
             msg_send![a, init]
         };
         let _: () = msg_send![session, beginConfiguration];
-        // el formato lo manda el dispositivo, no un preset (si no, al añadir la entrada se cambia el formato)
-        let _: () = msg_send![session, setSessionPreset: nsstr("AVCaptureSessionPresetInputPriority")];
+        // NO se fija `AVCaptureSessionPresetInputPriority` a mano: `setSessionPreset:` lo rechaza con NSException
+        // ("is not a supported preset"). La sesión pasa sola a ese preset cuando `apply` fija `activeFormat`, y por eso
+        // `apply` va DESPUÉS de `addInput` (si fuera antes, al añadir la entrada el preset por defecto pisaría el formato).
         let can: BOOL = msg_send![session, canAddInput: input];
         if can == NO {
             return Err("la sesión rechaza la entrada (¿cámara en uso por otra aplicación?)".into());
         }
         let _: () = msg_send![session, addInput: input];
         let output: *mut Object = msg_send![class!(AVCaptureVideoDataOutput), new];
-        let num: *mut Object = msg_send![class!(NSNumber), numberWithUnsignedInt: BGRA];
-        let settings: *mut Object = msg_send![class!(NSDictionary), dictionaryWithObject: num forKey: nsstr("PixelFormatType")];
-        let _: () = msg_send![output, setVideoSettings: settings];
+        let _: () = msg_send![output, setVideoSettings: output_settings(0, 0)];
         let _: () = msg_send![output, setAlwaysDiscardsLateVideoFrames: YES]; // baja latencia: nunca cola
         let _: () = msg_send![output, setSampleBufferDelegate: cb.inner() queue: cb.queue().0];
         let can: BOOL = msg_send![session, canAddOutput: output];
@@ -229,10 +242,14 @@ fn open_inner(index: usize, want: (u32, u32, u32)) -> Result<Cam, String> {
                 Err(e) => tried.push(format!("{} {}x{}@{}: {e}", o.fourcc, o.w, o.h, o.fps)),
             }
         }
-        let _: () = msg_send![session, commitConfiguration];
         let Some(o) = chosen else {
+            let _: () = msg_send![session, commitConfiguration];
             return Err(format!("AVFoundation rechazó todos los formatos probados: {}", tried.join(" | ")));
         };
+        // Medido con la MS2109: con `activeFormat` en 1280x720 la salida seguía entregando 1920x1080 (8294400 bytes).
+        // Se fija el tamaño también en la salida para que los cuadros midan lo que `run` espera.
+        let _: () = msg_send![output, setVideoSettings: output_settings(o.w, o.h)];
+        let _: () = msg_send![session, commitConfiguration];
         let _: () = msg_send![session, startRunning];
         Ok(Cam { dev, session, input, output, _cb: cb, _tx: tx, rx, w: o.w, h: o.h, desc: format!("{} {}x{}@{:.5}", o.fourcc, o.w, o.h, o.fps) })
     }
@@ -263,7 +280,9 @@ pub fn run(index: usize, mode: &Mode, latest: &Latest) -> Result<(), String> {
         let (w, h) = (cam.w as usize, cam.h as usize);
         let data = &last.0;
         let stride = if h > 0 { data.len() / h } else { 0 };
-        if stride < w * 4 {
+        // Además de que quepa, el relleno por fila tiene que ser pequeño: un cuadro de otro tamaño (p. ej. 1080p leído
+        // como 720p) daría un `stride` enorme y una imagen con filas desplazadas y colores mezclados.
+        if stride < w * 4 || stride >= w * 4 + 256 {
             bad += 1;
             latest.set_info(format!("AVFoundation: cuadro de {} bytes no cabe en {w}x{h} ({bad} descartados)", data.len()));
             if bad > 30 && seq == 0 {

@@ -1,10 +1,10 @@
 [workspace]
 resolver = "2"
-members = ["dkvm-core", "dkvm-cli", "dkvm-video", "dkvm-gui"]
+members = ["dkvm-core", "dkvm-cli", "dkvm-video", "dkvm-gui", "dkvm-mcp"]
 # dkvm-gui se añadirá cuando 1-4 estén verdes (egui/eframe)
 
 [workspace.package]
-version = "0.2.3"
+version = "0.2.4"
 edition = "2021"
 license = "MIT"
 
