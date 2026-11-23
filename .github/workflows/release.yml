@@ -50,7 +50,7 @@ jobs:
         run: cargo build --release --locked
 
       - name: Pruebas (sin hardware)
-        run: cargo test --release --locked -p dkvm-core -p dkvm-cli
+        run: cargo test --release --locked -p dkvm-core -p dkvm-cli -p riotkvm-mcp
 
       - name: Autocompletado de shell
         run: |
@@ -64,7 +64,7 @@ jobs:
           V=${{ steps.ver.outputs.v }}
           D="quim-dkvm-$V-linux-x86_64"
           mkdir -p "../dist/$D"
-          cp target/release/dkvm target/release/dkvm-gui "../dist/$D/"
+          cp target/release/dkvm target/release/dkvm-gui target/release/riotkvm-mcp "../dist/$D/"
           cp -r target/completions "../dist/$D/completions"
           cp ../packaging/linux/dkvm-gui.desktop README.md "../dist/$D/"
           [ -f ../LICENSE ] && cp ../LICENSE "../dist/$D/" || true
@@ -86,6 +86,7 @@ jobs:
           ls -l ../dist
           dpkg-deb --info ../dist/*.deb | head -20
           dpkg-deb --contents ../dist/*.deb
+          dpkg-deb --contents ../dist/*.deb | grep -q "usr/bin/riotkvm-mcp" || { echo "::error::el .deb no lleva riotkvm-mcp"; exit 1; }
           rpm -qpl ../dist/*.rpm || true
 
       - uses: actions/upload-artifact@v4
@@ -126,7 +127,7 @@ jobs:
           $V = "${{ steps.ver.outputs.v }}"
           $D = "quim-dkvm-$V-windows-x86_64"
           New-Item -ItemType Directory -Force "../dist/$D" | Out-Null
-          Copy-Item target/release/dkvm.exe, target/release/dkvm-gui.exe, target/release/vidbench.exe "../dist/$D/"
+          Copy-Item target/release/dkvm.exe, target/release/dkvm-gui.exe, target/release/riotkvm-mcp.exe, target/release/vidbench.exe "../dist/$D/"
           Copy-Item README.md "../dist/$D/README.md"
           if (Test-Path ../LICENSE) { Copy-Item ../LICENSE "../dist/$D/LICENSE" }
           Compress-Archive -Path "../dist/$D" -DestinationPath "../dist/$D.zip"
@@ -175,7 +176,7 @@ jobs:
         run: cargo build --release --locked
 
       - name: Pruebas (sin hardware)
-        run: cargo test --release --locked -p dkvm-core -p dkvm-cli
+        run: cargo test --release --locked -p dkvm-core -p dkvm-cli -p riotkvm-mcp
 
       - name: .app (firma ad-hoc) + .dmg + CLI
         working-directory: .
