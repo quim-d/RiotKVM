@@ -150,6 +150,11 @@ enum Cmd {
         #[arg(long, alias = "bright", value_parser = clap::value_parser!(u8).range(0..=100))]
         brillo: Option<u8>,
     },
+    /// Nombre del dongle (firmware 1.3.0+, se guarda en el dongle; es su nombre BLE): riotkvm name Rack3. Sin valor, lo muestra.
+    Name {
+        /// 1..20 caracteres de A-Z a-z 0-9 . _ - (RiotKVM = el de fábrica).
+        nuevo: Option<String>,
+    },
     /// Mueve el ratón. Absoluto: X Y en 0..32767 (o píxeles con --screen). Relativo: dx dy.
     Mouse {
         #[arg(allow_negative_numbers = true)]
@@ -430,6 +435,19 @@ fn dispatch(app: &mut App) -> Result<i32> {
                 let cur = kvm.led()?.ok_or_else(|| Error::Device(riotkvm_core::led::UNSUPPORTED.into()))?;
                 let shown = want.unwrap_or(cur); // BLE: INFO puede leerse antes de que el dongle aplique SET_LED
                 app.emit(json!({ "led": shown.to_string() }), Some(format!("luz: {shown}")));
+                Ok(())
+            })?;
+            Ok(0)
+        }
+        Cmd::Name { nuevo } => {
+            let want = nuevo.as_deref().map(riotkvm_core::name::validate).transpose()?;
+            app.with_kvm(|app, kvm| {
+                let shown = match &want {
+                    // BLE: INFO puede leerse antes de que el dongle aplique SET_NAME: vale lo enviado
+                    Some(n) => kvm.set_name(n)?,
+                    None => kvm.dongle_name()?.ok_or_else(|| Error::Device(riotkvm_core::name::UNSUPPORTED.into()))?,
+                };
+                app.emit(json!({ "name": shown }), Some(format!("nombre: {shown}")));
                 Ok(())
             })?;
             Ok(0)

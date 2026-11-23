@@ -250,6 +250,21 @@ fn ble_mock_refuses_serial_only_commands_with_a_clear_error() {
 }
 
 #[test]
+fn name_sets_and_shows_over_ble_and_serial_mocks() {
+    for port in ["ble-mock", "mock"] {
+        let o = invoke_full(&["-p", port, "name", "Rack-3"], "", None, vec![]);
+        assert_eq!(o.code, 0, "{port}: {}", o.stderr);
+        assert!(o.stdout.contains("nombre: Rack-3"), "{port}: {}", o.stdout);
+        let o = invoke_full(&["-p", port, "--json", "name"], "", None, vec![]);
+        assert_eq!(o.code, 0, "{port}: {}", o.stderr);
+        assert!(json_last(&o.stdout)["name"].is_string(), "{port}: {}", o.stdout);
+    }
+    for bad in ["con espacio", "123456789012345678901", "ñ"] {
+        assert_eq!(invoke_full(&["-p", "ble-mock", "name", bad], "", None, vec![]).code, 2, "{bad:?}");
+    }
+}
+
+#[test]
 fn led_sets_and_shows_over_ble_and_serial_mocks() {
     for port in ["ble-mock", "mock"] {
         let o = invoke_full(&["-p", port, "led", "ff8800", "--brillo", "60"], "", None, vec![]);

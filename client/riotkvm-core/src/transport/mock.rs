@@ -8,7 +8,7 @@ use std::collections::{BTreeSet, HashMap};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Duration;
 
-const KNOWN: [&str; 13] = ["type", "kd", "ku", "kall", "mm", "ma", "mbr", "mba", "status", "info", "stats", "bootloader", "led"];
+const KNOWN: [&str; 14] = ["type", "kd", "ku", "kall", "mm", "ma", "mbr", "mba", "status", "info", "stats", "bootloader", "led", "name"];
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MockEvent {
@@ -38,6 +38,8 @@ pub struct MockState {
     pub fail_lines: HashMap<String, String>,
     /// Ajuste de la luz (`led`); `None` = nunca tocado (auto).
     pub led: Option<crate::Led>,
+    /// Nombre del dongle (`name`); `None` = nunca tocado (RiotKVM).
+    pub name: Option<String>,
 }
 
 impl MockState {
@@ -175,7 +177,12 @@ impl MockTransport {
                 st.events.push(MockEvent::Mba(st.abs_buttons));
             }
             "status" => return "host=1 leds=0x00 hidready=1".into(),
-            "info" => return format!("fw=mock led={} build=\"mock\"", st.led.unwrap_or(crate::Led::Auto)),
+            "info" => return format!("fw=mock name={} led={} build=\"mock\"", st.name.as_deref().unwrap_or(crate::name::DEFAULT), st.led.unwrap_or(crate::Led::Auto)),
+            "name" if a.trim().is_empty() => return format!("name={}", st.name.as_deref().unwrap_or(crate::name::DEFAULT)),
+            "name" => match crate::name::validate(a) {
+                Ok(n) if n == a => st.name = Some(n),
+                _ => return "err range".into(),
+            },
             "led" if a.trim().is_empty() => return format!("led={}", st.led.unwrap_or(crate::Led::Auto)),
             "led" => match crate::Led::parse(a) {
                 Ok(l) => st.led = Some(l),
