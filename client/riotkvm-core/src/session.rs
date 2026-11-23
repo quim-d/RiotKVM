@@ -40,6 +40,9 @@ pub enum Cmd {
     /// Cambia las opciones de la sesión en caliente (camino de los clics del ratón absoluto). Se aplica en su sitio de la
     /// cola: lo anterior sale con las opciones viejas y lo posterior con las nuevas; si hay botones mantenidos se sueltan.
     SetOpts(SessionOpts),
+    /// Luz del dongle (firmware 1.2.0+; persistente en el dongle). Se aplica en su sitio de la cola y se reenvía si el
+    /// enlace se reconecta (lo último elegido en esta sesión). Respuesta: `Event::Led`.
+    SetLed(crate::Led),
     ReleaseAll,
     Quit,
 }
@@ -152,6 +155,9 @@ pub enum Event {
     Rtt(u64),
     /// El dongle rechazó una orden (`err nohost`...), con pista legible.
     DeviceError(String),
+    /// Luz del dongle: el ajuste vigente (leído de `info` al conectar, o el recién aplicado). `None` = el firmware no
+    /// admite control de la luz (anterior a 1.2.0).
+    Led(Option<crate::Led>),
 }
 
 pub type Connector = Box<dyn FnMut() -> Result<Box<dyn Transport>> + Send>;
@@ -251,7 +257,7 @@ fn apply(k: &mut Kvm, co: &mut MouseCoalescer, c: Cmd, opts: SessionOpts) -> Res
         Cmd::Repeat { .. } | Cmd::Paste(_) => Ok(()), // los trata `run` (necesitan eventos y cancelación)
         Cmd::Type(s) => k.type_text(&s, 0.0),
         Cmd::ReleaseAll => k.release_all(),
-        Cmd::SetOpts(_) | Cmd::Quit | Cmd::MouseAbs { .. } | Cmd::MouseRel { .. } => Ok(()), // `SetOpts` lo trata `run`
+        Cmd::SetOpts(_) | Cmd::SetLed(_) | Cmd::Quit | Cmd::MouseAbs { .. } | Cmd::MouseRel { .. } => Ok(()), // los trata `run`
     }
 }
 
@@ -450,6 +456,8 @@ fn run(connect: &mut Connector, layout: &str, rx: Receiver<Cmd>, emit: &dyn Fn(E
     let mut last_dev_err = Instant::now() - Duration::from_secs(10);
     let mut attempt = 0u32;
     let mut need_status = true;
+    let mut led: Option<crate::Led> = None; // lo elegido en esta sesión (se reenvía al reconectar)
+    let mut need_led = true; // leer la luz (y reenviar `led`) tras (re)conectar
 
     loop {
         if kvm.is_none() && Instant::now() >= next_retry {
@@ -467,6 +475,7 @@ fn run(connect: &mut Connector, layout: &str, rx: Receiver<Cmd>, emit: &dyn Fn(E
                     last_err.clear();
                     attempt = 0;
                     need_status = true;
+                    need_led = true;
                     kvm = Some(k);
                     next_poll = Instant::now();
                 }
@@ -505,6 +514,9 @@ fn run(connect: &mut Connector, layout: &str, rx: Receiver<Cmd>, emit: &dyn Fn(E
             let healing = k.t.self_healing();
             let up = k.t.link_state().map(|s| s.is_connected()).unwrap_or(true);
             let report = |e: Error, failure: &mut Option<Error>, last: &mut Instant| {
+                if e.message() == crate::led::UNSUPPORTED {
+                    emit(Event::Led(None));
+                }
                 if is_link_error(&e) {
                     if !healing {
                         *failure = Some(e);
@@ -524,6 +536,10 @@ fn run(connect: &mut Connector, layout: &str, rx: Receiver<Cmd>, emit: &dyn Fn(E
                         Cmd::Keys(s) | Cmd::Combo(s) => co.flush_into(k).and_then(|_| keys_run(k, &s, emit)),
                         Cmd::Repeat { combo, interval_ms, secs } => co.flush_into(k).and_then(|_| repeat_run(k, &combo, interval_ms, secs, cancel, emit)),
                         Cmd::SetOpts(o) => co.flush_into(k).and_then(|_| switch_opts(k, &mut opts, o)),
+                        Cmd::SetLed(l) => {
+                            led = Some(l);
+                            co.flush_into(k).and_then(|_| k.raw(&l.cmd())).map(|_| emit(Event::Led(Some(l))))
+                        }
                         other => apply(k, &mut co, other, opts),
                     };
                     if let Err(e) = r {
@@ -546,6 +562,7 @@ fn run(connect: &mut Connector, layout: &str, rx: Receiver<Cmd>, emit: &dyn Fn(E
                     TEvent::Link(s) => {
                         if s.is_connected() {
                             need_status = true;
+                            need_led = true;
                             next_poll = Instant::now();
                         }
                         emit(Event::Link(s));
@@ -556,6 +573,23 @@ fn run(connect: &mut Connector, layout: &str, rx: Receiver<Cmd>, emit: &dyn Fn(E
                         }
                     }
                     TEvent::Rtt(us) => emit(Event::Rtt(us)),
+                }
+            }
+            if failure.is_none() && need_led && up {
+                need_led = false;
+                // reenviar lo elegido en la sesión (el dongle lo guarda, pero pudo cambiarlo otro cliente) y leer el estado
+                let sent = match led {
+                    Some(l) => k.raw(&l.cmd()).is_ok(),
+                    None => false,
+                };
+                match k.info() {
+                    Ok(r) => {
+                        let cur = crate::Led::from_info_reply(&r);
+                        // BLE: INFO puede leerse antes de que el dongle procese SET_LED; vale lo enviado si lo admite
+                        emit(Event::Led(if sent && cur.is_some() { led } else { cur }));
+                    }
+                    Err(e) if is_link_error(&e) && !healing => failure = Some(e),
+                    Err(_) => {}
                 }
             }
             if failure.is_none() && Instant::now() >= next_poll && up {
@@ -649,6 +683,8 @@ mod tests {
         let ev = s.events.recv_timeout(Duration::from_secs(20)).unwrap();
         assert!(matches!(ev, Event::Link(LinkState::Connected { .. })));
         let ev = s.events.recv_timeout(Duration::from_secs(20)).unwrap();
+        assert_eq!(ev, Event::Led(Some(crate::Led::Auto)), "al conectar lee la luz de `info`");
+        let ev = s.events.recv_timeout(Duration::from_secs(20)).unwrap();
         assert!(matches!(ev, Event::Status { host: true, hidready: true, .. }), "{ev:?}");
         s.send(Cmd::Key { usage: 0x04, down: true });
         s.send(Cmd::Key { usage: 0x04, down: false });
@@ -656,7 +692,7 @@ mod tests {
         s.send(Cmd::Button { name: "left", down: false, rel: false });
         wait_until(|| h.lock().abs_buttons == 0 && h.lock().sent.iter().filter(|l| l.starts_with("mba")).count() >= 2);
         let st = h.lock();
-        let seq: Vec<&str> = st.sent.iter().map(String::as_str).filter(|l| !l.starts_with("status") && *l != "kall" && !l.starts_with("mbr 0") && *l != "mba 0").collect();
+        let seq: Vec<&str> = st.sent.iter().map(String::as_str).filter(|l| !l.starts_with("status") && *l != "kall" && *l != "info" && !l.starts_with("mbr 0") && *l != "mba 0").collect();
         assert_eq!(seq, ["kd 0x04", "ku 0x04", "mba 1"]);
     }
 
@@ -1074,6 +1110,42 @@ mod tests {
         assert_eq!(TargetOs::parse("beos"), None);
         assert!(!parse_abs_buttons("abs"));
         assert!(parse_abs_buttons("rel"));
+    }
+
+    /// Luz: se aplica en orden entre teclas, se confirma con `Event::Led`, se reenvía al reconectar el BLE y un
+    /// firmware viejo (UNKNOWN_OP) da `Event::Led(None)` + el aviso de actualizar.
+    #[test]
+    fn set_led_in_order_resent_on_reconnect_and_old_firmware() {
+        let (s, sim, link) = sim_rig("us");
+        let red = crate::Led::Color { rgb: [255, 0, 0], bright: 50 };
+        s.send(Cmd::Key { usage: 0x04, down: true });
+        s.send(Cmd::SetLed(red));
+        s.send(Cmd::Key { usage: 0x04, down: false });
+        let wait_led = |want: Option<crate::Led>| {
+            let t0 = Instant::now();
+            while t0.elapsed() < Duration::from_secs(20) {
+                if let Ok(Event::Led(l)) = s.events.recv_timeout(Duration::from_millis(50)) {
+                    if l == want {
+                        return;
+                    }
+                }
+            }
+            panic!("no llegó Event::Led({want:?})");
+        };
+        wait_led(Some(red));
+        wait_until(|| sim.state().log.iter().any(|(op, _)| *op == crate::ble_v1::KEY_UP));
+        let ops: Vec<u8> = sim.state().log.iter().map(|(op, _)| *op).filter(|op| [0x01, 0x02, 0x13].contains(op)).collect();
+        assert_eq!(ops, [0x01, 0x13, 0x02], "SET_LED en su sitio de la cola");
+        assert_eq!(sim.state().led, Some([1, 255, 0, 0, 50]));
+        // otro cliente lo cambia y el enlace se corta: al volver, se reenvía lo elegido en la sesión
+        sim.0.lock().unwrap().led = Some([0, 0, 0, 0, 0]);
+        link.drop_link("reinicio simulado");
+        wait_led(Some(red));
+        wait_until(|| sim.state().led == Some([1, 255, 0, 0, 50]));
+        // firmware viejo
+        sim.0.lock().unwrap().led = None;
+        s.send(Cmd::SetLed(crate::Led::Off));
+        wait_led(None);
     }
 
     fn sim_rig_opts(via_rel: bool) -> SimRig {
