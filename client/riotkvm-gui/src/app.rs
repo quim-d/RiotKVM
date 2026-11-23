@@ -595,6 +595,7 @@ impl App {
                     };
                     self.note(msg, err);
                 }
+                Event::Led(l) => self.settings.on_led(l),
                 Event::DeviceError(m) => {
                     dlog::bump(&ERRORS);
                     dlog!("ERROR del dongle: {m}");
@@ -1195,6 +1196,7 @@ impl eframe::App for App {
                 self.send(Cmd::SetOpts(o));
                 self.note(msg, false);
             }
+            Some(crate::settings::Change::Led(l)) => self.send(Cmd::SetLed(l)),
             None => {}
         }
         self.tools.show(&ctx);

@@ -509,6 +509,10 @@ fn run(connect: &mut Connector, layout: &str, rx: Receiver<Cmd>, emit: &dyn Fn(E
         let quit = batch.iter().any(|c| matches!(c, Cmd::Quit));
         // la última `SetOpts` del lote queda vigente aunque no haya enlace (o se corte a mitad de lote)
         let last_opts = batch.iter().rev().find_map(|c| if let Cmd::SetOpts(o) = c { Some(*o) } else { None });
+        // la luz elegida sin enlace (o con el enlace caído) no se pierde: se envía al (re)conectar
+        if let Some(l) = batch.iter().rev().find_map(|c| if let Cmd::SetLed(l) = c { Some(*l) } else { None }) {
+            led = Some(l);
+        }
         let mut failure: Option<Error> = None;
         if let Some(k) = kvm.as_mut() {
             let healing = k.t.self_healing();
@@ -537,7 +541,6 @@ fn run(connect: &mut Connector, layout: &str, rx: Receiver<Cmd>, emit: &dyn Fn(E
                         Cmd::Repeat { combo, interval_ms, secs } => co.flush_into(k).and_then(|_| repeat_run(k, &combo, interval_ms, secs, cancel, emit)),
                         Cmd::SetOpts(o) => co.flush_into(k).and_then(|_| switch_opts(k, &mut opts, o)),
                         Cmd::SetLed(l) => {
-                            led = Some(l);
                             co.flush_into(k).and_then(|_| k.raw(&l.cmd())).map(|_| emit(Event::Led(Some(l))))
                         }
                         other => apply(k, &mut co, other, opts),

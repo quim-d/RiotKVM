@@ -1,11 +1,16 @@
-//! Ventana de Ajustes (pestañas): equipo controlado (compatibilidad de los clics del ratón), teclado del servidor e
-//! información. No toca la sesión directamente: devuelve un `Change` y `App` lo aplica (`Cmd::SetOpts`, `Cmd::SetLayout`).
+//! Ventana de Ajustes (pestañas): equipo controlado (compatibilidad de los clics del ratón), teclado del servidor, luz
+//! del dongle e información. No toca la sesión directamente: devuelve un `Change` y `App` lo aplica (`Cmd::SetOpts`,
+//! `Cmd::SetLayout`, `Cmd::SetLed`).
+//!
+//! Luz: el ajuste vive en el dongle (NVS, firmware 1.2.0+). La pestaña muestra el que el dongle reporta al conectar
+//! (`Event::Led`); sin enlace, el último conocido (`led.txt`). Se aplica en caliente al tocarla.
 //!
 //! Compatibilidad con el SO destino (comprobado con hardware): Fedora no reacciona a los botones del informe ABSOLUTO;
 //! el macOS destino solo reacciona a ellos; Windows funciona con los botones por el ratón relativo (el defecto).
 //! Se guarda en `target.txt` (directorio de estado de `riotkvm_core::config`); `RIOTKVM_ABS_BUTTONS` manda al arrancar.
 
 use crate::{dlog, hook, theme};
+use riotkvm_core::led::{Led, DEFAULT_BRIGHT};
 use riotkvm_core::session::{abs_buttons_env_override, SessionOpts, TargetOs};
 use eframe::egui;
 
@@ -88,7 +93,39 @@ fn path_label(via_rel: bool) -> &'static str {
 enum Tab {
     Target,
     Keyboard,
+    Light,
     Info,
+}
+
+/// Muestras rápidas de color: la paleta de docs/DESIGN.md.
+const SWATCHES: [(egui::Color32, &str); 6] =
+    [(theme::VERDE, "verde"), (theme::AMBAR, "ámbar"), (theme::CIAN, "cian"), (theme::MAGENTA, "magenta"), (theme::ROJO, "rojo"), (theme::HUESO, "hueso")];
+
+/// Estado de la pestaña Luz.
+struct Light {
+    /// Ajuste mostrado (el del dongle si se conoce).
+    led: Led,
+    /// Color y brillo para "Color" aunque ahora esté en auto/apagado.
+    rgb: [u8; 3],
+    bright: u8,
+    /// `Some(false)` = el firmware conectado no admite control de la luz.
+    supported: Option<bool>,
+}
+
+impl Light {
+    fn new(led: Led) -> Light {
+        let mut l = Light { led, rgb: [0x00, 0xFF, 0x46], bright: DEFAULT_BRIGHT, supported: None };
+        l.remember(led);
+        l
+    }
+
+    fn remember(&mut self, led: Led) {
+        self.led = led;
+        if let Led::Color { rgb, bright } = led {
+            self.rgb = rgb;
+            self.bright = bright;
+        }
+    }
 }
 
 /// Lo que la ventana necesita saber de la app para pintarse.
@@ -104,6 +141,8 @@ pub enum Change {
     Layout(&'static str),
     /// Opciones nuevas de la sesión + texto para la barra de estado.
     Opts(SessionOpts, String),
+    /// Luz del dongle.
+    Led(Led),
 }
 
 pub struct Settings {
@@ -112,6 +151,7 @@ pub struct Settings {
     compat: Compat,
     /// `RIOTKVM_ABS_BUTTONS` fijó el arranque (se muestra el aviso hasta que se elija otra cosa aquí).
     env_note: Option<bool>,
+    light: Light,
 }
 
 impl Settings {
@@ -123,7 +163,21 @@ impl Settings {
                 compat = Compat { os: None, via_rel: v }; // se muestra lo que de verdad está en uso (no se guarda)
             }
         }
-        Settings { open: false, tab: Tab::Target, compat, env_note: env }
+        Settings { open: false, tab: Tab::Target, compat, env_note: env, light: Light::new(Led::load_saved().unwrap_or(Led::Auto)) }
+    }
+
+    /// Luz reportada por la sesión (`Event::Led`): el estado real del dongle, o `None` si su firmware no la admite.
+    pub fn on_led(&mut self, led: Option<Led>) {
+        match led {
+            Some(l) => {
+                self.light.supported = Some(true);
+                if l != self.light.led {
+                    l.save();
+                }
+                self.light.remember(l);
+            }
+            None => self.light.supported = Some(false),
+        }
     }
 
     pub fn show(&mut self, ctx: &egui::Context, info: &Info) -> Option<Change> {
@@ -136,12 +190,14 @@ impl Settings {
             ui.horizontal(|ui| {
                 ui.selectable_value(&mut self.tab, Tab::Target, "Servidor");
                 ui.selectable_value(&mut self.tab, Tab::Keyboard, "Teclado");
+                ui.selectable_value(&mut self.tab, Tab::Light, "Luz");
                 ui.selectable_value(&mut self.tab, Tab::Info, "Información");
             });
             ui.separator();
             change = match self.tab {
                 Tab::Target => self.target_tab(ui, info),
                 Tab::Keyboard => keyboard_tab(ui, info),
+                Tab::Light => self.light_tab(ui),
                 Tab::Info => {
                     info_tab(ui, info);
                     None
@@ -194,6 +250,55 @@ impl Settings {
     }
 }
 
+impl Settings {
+    fn light_tab(&mut self, ui: &mut egui::Ui) -> Option<Change> {
+        let l = &mut self.light;
+        let before = l.led;
+        let is_color = matches!(l.led, Led::Color { .. });
+        ui.horizontal(|ui| {
+            if ui.selectable_label(l.led == Led::Auto, "Automático").on_hover_text("Color según modo, BLE y SD").clicked() {
+                l.led = Led::Auto;
+            }
+            if ui.selectable_label(is_color, "Color").clicked() && !is_color {
+                l.led = Led::Color { rgb: l.rgb, bright: l.bright };
+            }
+            if ui.selectable_label(l.led == Led::Off, "Apagado").clicked() {
+                l.led = Led::Off;
+            }
+        });
+        if is_color {
+            ui.add_space(8.0);
+            ui.horizontal(|ui| {
+                ui.color_edit_button_srgb(&mut l.rgb);
+                ui.add_space(6.0);
+                for (c, name) in SWATCHES {
+                    let b = egui::Button::new("").fill(c).min_size(egui::vec2(18.0, 18.0)).selected(l.rgb == [c.r(), c.g(), c.b()]);
+                    if ui.add(b).on_hover_text(name).clicked() {
+                        l.rgb = [c.r(), c.g(), c.b()];
+                    }
+                }
+            });
+            ui.add_space(4.0);
+            ui.horizontal(|ui| {
+                ui.label("Brillo");
+                ui.add(egui::Slider::new(&mut l.bright, 0..=100).suffix(" %"));
+            });
+            l.led = Led::Color { rgb: l.rgb, bright: l.bright };
+        }
+        if l.supported == Some(false) {
+            ui.add_space(6.0);
+            ui.colored_label(theme::AMBAR, "Firmware sin control de la luz: actualízalo.");
+        }
+        if l.led == before {
+            return None;
+        }
+        let led = l.led;
+        led.save();
+        dlog!("luz -> {led}");
+        Some(Change::Led(led))
+    }
+}
+
 fn keyboard_tab(ui: &mut egui::Ui, info: &Info) -> Option<Change> {
     ui.label(egui::RichText::new("Idioma del teclado del servidor").strong());
     ui.add_space(6.0);
@@ -240,5 +345,14 @@ mod tests {
         assert_eq!(Compat::from_text(""), Compat::default());
         assert_eq!(Compat::from_text("os=beos"), Compat::default());
         assert!(Compat::default().opts().abs_buttons_via_rel);
+    }
+
+    #[test]
+    fn light_remembers_color_for_the_color_button() {
+        let mut l = Light::new(Led::Auto);
+        assert_eq!((l.rgb, l.bright), ([0x00, 0xFF, 0x46], DEFAULT_BRIGHT), "defecto: verde de la paleta al 35 %");
+        l.remember(Led::Color { rgb: [1, 2, 3], bright: 9 });
+        l.remember(Led::Off);
+        assert_eq!((l.led, l.rgb, l.bright), (Led::Off, [1, 2, 3], 9), "volver a Color recupera el último color");
     }
 }
