@@ -429,7 +429,9 @@ fn link_thread(mut connector: Box<dyn GattConnector>, mut codec: Box<dyn Codec>,
                         if let Err(e) = link.write_cmd(&buf) {
                             break 'serve e.message().to_string();
                         }
-                        last_write = Instant::now();
+                        // el hueco se cuenta desde que EMPIEZA la escritura: con respuesta (macOS, ~28 ms) la llamada ya
+                        // dura más que el hueco y contarlo desde el final retrasaba cada movimiento otros `move_gap`
+                        last_write = tw;
                         crate::latency::record_write(buf_t.take().map(|t| t.elapsed()), tw.elapsed());
                         buf.clear();
                     }
@@ -701,6 +703,35 @@ mod tests {
         // orden conservado: la tecla es lo último que sale (trama [len=4]"kd 4")
         let flat: Vec<u8> = w.concat();
         assert!(flat.ends_with(&[4, b'k', b'd', b' ', b'4']), "{flat:?}");
+    }
+
+    /// Escritura lenta (con respuesta, como en macOS): el hueco de movimiento cuenta desde el INICIO de la escritura
+    /// anterior, así que el movimiento que esperaba sale en cuanto vuelve la escritura en vez de esperar otro hueco.
+    #[test]
+    fn slow_write_does_not_add_another_motion_gap() {
+        use std::sync::atomic::{AtomicBool, Ordering};
+        let d = MockDongle::new();
+        let entered = Arc::new(AtomicBool::new(false));
+        let stamps: Arc<Mutex<Vec<(Instant, Instant)>>> = Arc::default();
+        let (e2, s2) = (entered.clone(), stamps.clone());
+        d.set_responder(move |w| {
+            let t0 = Instant::now();
+            if w.starts_with(b"\x06mm") && !e2.swap(true, Ordering::SeqCst) {
+                std::thread::sleep(Duration::from_millis(1200)); // primera escritura de movimiento: muy lenta
+            }
+            s2.lock().unwrap().push((t0, Instant::now()));
+            vec![]
+        });
+        let opts = BleOptions { move_gap: Duration::from_millis(1000), ..fast() };
+        let mut t = BleTransport::open(d.connector(), Box::new(TestCodec), opts, Duration::from_secs(20)).unwrap();
+        t.send("mm 1 0", false).unwrap();
+        wait(|| entered.load(Ordering::SeqCst));
+        t.send("mm 2 0", false).unwrap(); // llega mientras la primera escritura está en curso
+        wait(|| stamps.lock().unwrap().len() >= 2);
+        let s = stamps.lock().unwrap();
+        let gap = s[1].0.saturating_duration_since(s[0].1);
+        // antes: ~1000 ms (otro hueco entero contado desde el final de la escritura); ahora: lo que tarde el hilo
+        assert!(gap < Duration::from_millis(500), "el movimiento esperó {gap:?} tras una escritura lenta");
     }
 
     #[test]
