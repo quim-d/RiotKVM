@@ -1381,18 +1381,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "dkvm-mcp"
-version = "0.2.4"
-dependencies = [
- "base64 0.22.1",
- "dkvm-core",
- "dkvm-video",
- "image",
- "rquickjs",
- "serde_json",
-]
-
-[[package]]
 name = "dkvm-video"
 version = "0.2.4"
 dependencies = [
@@ -4101,6 +4089,18 @@ dependencies = [
  "libc",
  "untrusted",
  "windows-sys 0.52.0",
+]
+
+[[package]]
+name = "riotkvm-mcp"
+version = "0.2.4"
+dependencies = [
+ "base64 0.22.1",
+ "dkvm-core",
+ "dkvm-video",
+ "image",
+ "rquickjs",
+ "serde_json",
 ]
 
 [[package]]
