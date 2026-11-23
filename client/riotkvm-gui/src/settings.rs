@@ -98,8 +98,15 @@ enum Tab {
 }
 
 /// Muestras rápidas de color: la paleta de docs/DESIGN.md.
-const SWATCHES: [(egui::Color32, &str); 6] =
-    [(egui::Color32::from_rgb(0x00, 0xFF, 0x00), "verde"), (theme::AMBAR, "ámbar"), (theme::CIAN, "cian"), (theme::MAGENTA, "magenta"), (theme::ROJO, "rojo"), (theme::HUESO, "hueso")];
+const SWATCHES: [(egui::Color32, &str); 7] = [
+    (egui::Color32::from_rgb(0x00, 0xFF, 0x00), "verde"),
+    (egui::Color32::from_rgb(0xFF, 0x00, 0x00), "rojo"),
+    (egui::Color32::from_rgb(0xFF, 0x80, 0x00), "naranja"),
+    (egui::Color32::from_rgb(0x00, 0x00, 0xFF), "azul"),
+    (egui::Color32::from_rgb(0x80, 0x00, 0xFF), "lila"),
+    (egui::Color32::from_rgb(0xFF, 0xFF, 0x00), "amarillo"),
+    (egui::Color32::from_rgb(0xFF, 0xFF, 0xFF), "blanco"),
+];
 
 /// Estado de la pestaña Luz.
 struct Light {
