@@ -71,7 +71,7 @@ impl PasteChord {
     }
     pub fn label(self) -> &'static str {
         match self {
-            PasteChord::Off => "(sin atajo)",
+            PasteChord::Off => crate::i18n::t("h.no_chord"),
             PasteChord::CtrlShiftV => "Ctrl+Shift+V",
             PasteChord::CtrlAltV => "Ctrl+Alt+V",
             PasteChord::CtrlShiftInsert => "Ctrl+Shift+Insert",

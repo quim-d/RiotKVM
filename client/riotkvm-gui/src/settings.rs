@@ -2,6 +2,8 @@
 //! del dongle e información. No toca la sesión directamente: devuelve un `Change` y `App` lo aplica (`Cmd::SetOpts`,
 //! `Cmd::SetLayout`, `Cmd::SetLed`).
 //!
+//! Idioma: el de la GUI (`i18n`), se aplica en caliente y se guarda en `lang.txt`.
+//!
 //! Luz: el ajuste vive en el dongle (NVS, firmware 1.2.0+). La pestaña muestra el que el dongle reporta al conectar
 //! (`Event::Led`); sin enlace, el último conocido (`led.txt`). Se aplica en caliente al tocarla.
 //!
@@ -9,7 +11,8 @@
 //! el macOS destino solo reacciona a ellos; Windows funciona con los botones por el ratón relativo (el defecto).
 //! Se guarda en `target.txt` (directorio de estado de `riotkvm_core::config`); `RIOTKVM_ABS_BUTTONS` manda al arrancar.
 
-use crate::{dlog, hook, theme};
+use crate::i18n::{self, t, Lang};
+use crate::{dlog, hook, theme, tf};
 use riotkvm_core::led::{Led, DEFAULT_BRIGHT};
 use riotkvm_core::session::{abs_buttons_env_override, SessionOpts, TargetOs};
 use eframe::egui;
@@ -83,9 +86,9 @@ pub fn initial_session_opts() -> SessionOpts {
 
 fn path_label(via_rel: bool) -> &'static str {
     if via_rel {
-        "ratón relativo"
+        t("n.via_rel")
     } else {
-        "informe absoluto"
+        t("n.via_abs")
     }
 }
 
@@ -94,18 +97,19 @@ enum Tab {
     Target,
     Keyboard,
     Light,
+    Lang,
     Info,
 }
 
-/// Muestras rápidas de color: la paleta de docs/DESIGN.md.
+/// Muestras rápidas de color: la paleta de docs/DESIGN.md (nombre = clave de `i18n`).
 const SWATCHES: [(egui::Color32, &str); 7] = [
-    (egui::Color32::from_rgb(0x00, 0xFF, 0x00), "verde"),
-    (egui::Color32::from_rgb(0xFF, 0x00, 0x00), "rojo"),
-    (egui::Color32::from_rgb(0xFF, 0x80, 0x00), "naranja"),
-    (egui::Color32::from_rgb(0x00, 0x00, 0xFF), "azul"),
-    (egui::Color32::from_rgb(0x80, 0x00, 0xFF), "lila"),
-    (egui::Color32::from_rgb(0xFF, 0xFF, 0x00), "amarillo"),
-    (egui::Color32::from_rgb(0xFF, 0xFF, 0xFF), "blanco"),
+    (egui::Color32::from_rgb(0x00, 0xFF, 0x00), "c.green"),
+    (egui::Color32::from_rgb(0xFF, 0x00, 0x00), "c.red"),
+    (egui::Color32::from_rgb(0xFF, 0x80, 0x00), "c.orange"),
+    (egui::Color32::from_rgb(0x00, 0x00, 0xFF), "c.blue"),
+    (egui::Color32::from_rgb(0x80, 0x00, 0xFF), "c.purple"),
+    (egui::Color32::from_rgb(0xFF, 0xFF, 0x00), "c.yellow"),
+    (egui::Color32::from_rgb(0xFF, 0xFF, 0xFF), "c.white"),
 ];
 
 /// Estado de la pestaña Luz.
@@ -150,6 +154,8 @@ pub enum Change {
     Opts(SessionOpts, String),
     /// Luz del dongle.
     Led(Led),
+    /// Idioma de la GUI (ya aplicado): la app actualiza el título de la ventana.
+    Lang,
 }
 
 pub struct Settings {
@@ -193,12 +199,13 @@ impl Settings {
         }
         let mut open = true;
         let mut change = None;
-        egui::Window::new("Ajustes").open(&mut open).default_pos([60.0, 80.0]).default_width(460.0).resizable(true).show(ctx, |ui| {
+        egui::Window::new(t("top.settings")).id(egui::Id::unique("settings")).open(&mut open).default_pos([60.0, 80.0]).default_width(460.0).resizable(true).show(ctx, |ui| {
             ui.horizontal(|ui| {
-                ui.selectable_value(&mut self.tab, Tab::Target, "Servidor");
-                ui.selectable_value(&mut self.tab, Tab::Keyboard, "Teclado");
-                ui.selectable_value(&mut self.tab, Tab::Light, "Luz");
-                ui.selectable_value(&mut self.tab, Tab::Info, "Información");
+                ui.selectable_value(&mut self.tab, Tab::Target, t("s.tab_target"));
+                ui.selectable_value(&mut self.tab, Tab::Keyboard, t("s.tab_keyboard"));
+                ui.selectable_value(&mut self.tab, Tab::Light, t("s.tab_light"));
+                ui.selectable_value(&mut self.tab, Tab::Lang, t("s.tab_lang"));
+                ui.selectable_value(&mut self.tab, Tab::Info, t("s.tab_info"));
             });
             ui.separator();
             // contenido con scroll que ocupa todo el alto: la ventana se puede estirar en vertical
@@ -207,6 +214,7 @@ impl Settings {
                     Tab::Target => self.target_tab(ui, info),
                     Tab::Keyboard => keyboard_tab(ui, info),
                     Tab::Light => self.light_tab(ui),
+                    Tab::Lang => lang_tab(ui),
                     Tab::Info => {
                         info_tab(ui, info);
                         None
@@ -219,8 +227,8 @@ impl Settings {
     }
 
     fn target_tab(&mut self, ui: &mut egui::Ui, info: &Info) -> Option<Change> {
-        ui.label(egui::RichText::new("Sistema del servidor").strong());
-        ui.label(egui::RichText::new("Si el clic no responde, cambia el sistema.").color(theme::GRIS));
+        ui.label(egui::RichText::new(t("s.os_title")).strong());
+        ui.label(egui::RichText::new(t("s.os_hint")).color(theme::GRIS));
         ui.add_space(6.0);
         let before = self.compat;
         ui.horizontal(|ui| {
@@ -231,22 +239,22 @@ impl Settings {
             }
         });
         ui.add_space(6.0);
-        egui::CollapsingHeader::new("Avanzado").default_open(self.compat.os.is_none()).show(ui, |ui| {
+        egui::CollapsingHeader::new(t("s.advanced")).id_salt("advanced").default_open(self.compat.os.is_none()).show(ui, |ui| {
             ui.horizontal(|ui| {
-                ui.label("Clics por:");
-                if ui.radio(!self.compat.via_rel, "absoluto").clicked() {
+                ui.label(t("s.clicks_via"));
+                if ui.radio(!self.compat.via_rel, t("s.abs")).clicked() {
                     self.compat = Compat { os: None, via_rel: false };
                 }
-                if ui.radio(self.compat.via_rel, "relativo").clicked() {
+                if ui.radio(self.compat.via_rel, t("s.rel")).clicked() {
                     self.compat = Compat { os: None, via_rel: true };
                 }
             });
         });
         if !info.mouse_abs {
-            let msg = if self.compat.os == Some(TargetOs::Macos) { "Ratón en rel: en macOS el clic no funciona, usa abs." } else { "Ratón en rel: este ajuste no se aplica." };
+            let msg = if self.compat.os == Some(TargetOs::Macos) { t("s.rel_macos") } else { t("s.rel_na") };
             ui.colored_label(theme::AMBAR, msg);
         } else if self.env_note.is_some() {
-            ui.colored_label(theme::AMBAR, "RIOTKVM_ABS_BUTTONS fijó el arranque.");
+            ui.colored_label(theme::AMBAR, t("s.env_note"));
         }
         if self.compat == before {
             return None;
@@ -254,9 +262,9 @@ impl Settings {
         self.compat.save();
         self.env_note = None;
         let opts = self.compat.opts();
-        let who = self.compat.os.map(|o| o.label()).unwrap_or("manual");
+        let who = self.compat.os.map(|o| o.label()).unwrap_or(t("s.manual"));
         dlog!("compatibilidad destino -> {who}: abs_buttons_via_rel={}", opts.abs_buttons_via_rel);
-        Some(Change::Opts(opts, format!("equipo controlado: {who} (clics por el {})", path_label(opts.abs_buttons_via_rel))))
+        Some(Change::Opts(opts, tf!("n.target", who, path_label(opts.abs_buttons_via_rel))))
     }
 }
 
@@ -266,13 +274,13 @@ impl Settings {
         let before = l.led;
         let is_color = matches!(l.led, Led::Color { .. });
         ui.horizontal(|ui| {
-            if ui.selectable_label(l.led == Led::Auto, "Automático").on_hover_text("Color según modo, BLE y SD").clicked() {
+            if ui.selectable_label(l.led == Led::Auto, t("s.auto")).on_hover_text(t("s.auto_tip")).clicked() {
                 l.led = Led::Auto;
             }
-            if ui.selectable_label(is_color, "Color").clicked() && !is_color {
+            if ui.selectable_label(is_color, t("s.color")).clicked() && !is_color {
                 l.led = Led::Color { rgb: l.rgb, bright: l.bright };
             }
-            if ui.selectable_label(l.led == Led::Off, "Apagado").clicked() {
+            if ui.selectable_label(l.led == Led::Off, t("s.off")).clicked() {
                 l.led = Led::Off;
             }
         });
@@ -284,21 +292,21 @@ impl Settings {
                 ui.add_space(6.0);
                 for (c, name) in SWATCHES {
                     let b = egui::Button::new("").fill(c).min_size(egui::vec2(18.0, 18.0)).selected(l.rgb == [c.r(), c.g(), c.b()]);
-                    if ui.add(b).on_hover_text(name).clicked() {
+                    if ui.add(b).on_hover_text(t(name)).clicked() {
                         l.rgb = [c.r(), c.g(), c.b()];
                     }
                 }
             });
             ui.add_space(4.0);
             ui.horizontal(|ui| {
-                ui.label("Brillo");
+                ui.label(t("s.bright"));
                 ui.add(egui::Slider::new(&mut l.bright, 0..=100).suffix(" %"));
             });
             l.led = Led::Color { rgb: l.rgb, bright: l.bright };
         }
         if l.supported == Some(false) {
             ui.add_space(6.0);
-            ui.colored_label(theme::AMBAR, "Firmware sin control de la luz: actualízalo.");
+            ui.colored_label(theme::AMBAR, t("s.no_led"));
         }
         if l.led == before {
             return None;
@@ -311,7 +319,7 @@ impl Settings {
 }
 
 fn keyboard_tab(ui: &mut egui::Ui, info: &Info) -> Option<Change> {
-    ui.label(egui::RichText::new("Idioma del teclado del servidor").strong());
+    ui.label(egui::RichText::new(t("s.kbd_title")).strong());
     ui.add_space(6.0);
     let mut pick = None;
     for n in riotkvm_core::layouts::LAYOUT_NAMES {
@@ -322,10 +330,29 @@ fn keyboard_tab(ui: &mut egui::Ui, info: &Info) -> Option<Change> {
     pick
 }
 
+/// Idioma de la GUI: cada opción en su propio idioma; se aplica al momento.
+fn lang_tab(ui: &mut egui::Ui) -> Option<Change> {
+    ui.label(egui::RichText::new(t("s.lang_title")).strong());
+    ui.add_space(6.0);
+    let cur = i18n::lang();
+    let mut pick = None;
+    ui.horizontal(|ui| {
+        for l in Lang::ALL {
+            if ui.selectable_label(cur == l, l.native_name()).clicked() && cur != l {
+                pick = Some(l);
+            }
+        }
+    });
+    let l = pick?;
+    i18n::set(l);
+    dlog!("idioma -> {}", l.code());
+    Some(Change::Lang)
+}
+
 fn info_tab(ui: &mut egui::Ui, info: &Info) {
-    ui.label(format!("ratón: {}", if info.mouse_abs { "absoluto" } else { "relativo (BIOS)" }));
-    ui.label(format!("soltar la captura: {}", hook::ESCAPE_HELP));
-    ui.label(format!("pegar el portapapeles: {}", info.paste_chord));
+    ui.label(tf!("s.info_mouse", if info.mouse_abs { t("s.abs") } else { t("s.rel_bios") }));
+    ui.label(tf!("s.info_release", hook::ESCAPE_HELP));
+    ui.label(tf!("s.info_paste", info.paste_chord));
     ui.separator();
     ui.label(egui::RichText::new(format!("RiotKVM {} · {}", env!("CARGO_PKG_VERSION"), info.transport)).color(theme::GRIS));
     repo_link(ui);
