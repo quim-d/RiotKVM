@@ -99,7 +99,7 @@ enum Tab {
 
 /// Muestras rápidas de color: la paleta de docs/DESIGN.md.
 const SWATCHES: [(egui::Color32, &str); 6] =
-    [(theme::VERDE, "verde"), (theme::AMBAR, "ámbar"), (theme::CIAN, "cian"), (theme::MAGENTA, "magenta"), (theme::ROJO, "rojo"), (theme::HUESO, "hueso")];
+    [(egui::Color32::from_rgb(0x00, 0xFF, 0x00), "verde"), (theme::AMBAR, "ámbar"), (theme::CIAN, "cian"), (theme::MAGENTA, "magenta"), (theme::ROJO, "rojo"), (theme::HUESO, "hueso")];
 
 /// Estado de la pestaña Luz.
 struct Light {
@@ -114,7 +114,7 @@ struct Light {
 
 impl Light {
     fn new(led: Led) -> Light {
-        let mut l = Light { led, rgb: [0x00, 0xFF, 0x46], bright: DEFAULT_BRIGHT, supported: None };
+        let mut l = Light { led, rgb: [0x00, 0xFF, 0x00], bright: DEFAULT_BRIGHT, supported: None };
         l.remember(led);
         l
     }
@@ -351,7 +351,7 @@ mod tests {
     #[test]
     fn light_remembers_color_for_the_color_button() {
         let mut l = Light::new(Led::Auto);
-        assert_eq!((l.rgb, l.bright), ([0x00, 0xFF, 0x46], DEFAULT_BRIGHT), "defecto: verde de la paleta al 35 %");
+        assert_eq!((l.rgb, l.bright), ([0x00, 0xFF, 0x00], DEFAULT_BRIGHT), "defecto: verde puro al 35 %");
         l.remember(Led::Color { rgb: [1, 2, 3], bright: 9 });
         l.remember(Led::Off);
         assert_eq!((l.led, l.rgb, l.bright), (Led::Off, [1, 2, 3], 9), "volver a Color recupera el último color");
