@@ -377,8 +377,54 @@ pub fn start(src: &Source, mode: &Mode, latest: Arc<Latest>) -> std::thread::Joi
         .expect("hilo de vídeo")
 }
 
-#[allow(dead_code)]
-fn _unused(_: Duration, _: Instant) {}
+/// BGRA (filas de `stride` bytes, `stride >= w*4`) -> RGBA compacto (`w*h*4`) EN EL MISMO búfer, sin reservar otro:
+/// cada fila se desplaza a su sitio (el destino nunca adelanta al origen) y se intercambian R y B con alfa 255.
+/// Medido a 1080p sin relleno: 2,5-2,7 ms -> 1,6-1,7 ms por cuadro (copia del callback + conversión + paso a la GUI).
+pub fn bgra_to_rgba_in_place(mut data: Vec<u8>, w: usize, h: usize, stride: usize) -> Vec<u8> {
+    let row = w * 4;
+    assert!(stride >= row && data.len() >= stride * h.saturating_sub(1) + row, "búfer BGRA demasiado corto");
+    let swizzle = |px: &mut [u8]| {
+        for p in px.chunks_exact_mut(4) {
+            p.swap(0, 2);
+            p[3] = 255;
+        }
+    };
+    if stride == row {
+        swizzle(&mut data[..row * h]);
+    } else {
+        for y in 0..h {
+            data.copy_within(y * stride..y * stride + row, y * row);
+            swizzle(&mut data[y * row..(y + 1) * row]);
+        }
+    }
+    data.truncate(row * h);
+    data
+}
+
+#[cfg(test)]
+mod convert_tests {
+    #[test]
+    fn bgra_to_rgba_with_and_without_row_padding() {
+        let (w, h) = (3usize, 2usize);
+        for pad in [0usize, 4, 8] {
+            let stride = w * 4 + pad;
+            let mut src = vec![0xEEu8; stride * h];
+            for y in 0..h {
+                for x in 0..w {
+                    let i = y * stride + x * 4;
+                    let v = (y * w + x) as u8 * 10;
+                    src[i..i + 4].copy_from_slice(&[v, v + 1, v + 2, 7]); // B G R A
+                }
+            }
+            let out = super::bgra_to_rgba_in_place(src, w, h, stride);
+            assert_eq!(out.len(), w * h * 4);
+            for (k, px) in out.chunks_exact(4).enumerate() {
+                let v = k as u8 * 10;
+                assert_eq!(px, [v + 2, v + 1, v, 255], "píxel {k} con relleno {pad}");
+            }
+        }
+    }
+}
 
 #[cfg(test)]
 mod source_tests {

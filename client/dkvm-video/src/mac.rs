@@ -278,7 +278,7 @@ pub fn run(index: usize, mode: &Mode, latest: &Latest) -> Result<(), String> {
         }
         let arrived = Instant::now();
         let (w, h) = (cam.w as usize, cam.h as usize);
-        let data = &last.0;
+        let data = last.0;
         let stride = if h > 0 { data.len() / h } else { 0 };
         // Además de que quepa, el relleno por fila tiene que ser pequeño: un cuadro de otro tamaño (p. ej. 1080p leído
         // como 720p) daría un `stride` enorme y una imagen con filas desplazadas y colores mezclados.
@@ -291,17 +291,7 @@ pub fn run(index: usize, mode: &Mode, latest: &Latest) -> Result<(), String> {
             continue;
         }
         let t = Instant::now();
-        let mut rgba = vec![0u8; w * h * 4];
-        for y in 0..h {
-            let src = &data[y * stride..y * stride + w * 4];
-            let dst = &mut rgba[y * w * 4..(y + 1) * w * 4];
-            for (s, d) in src.chunks_exact(4).zip(dst.chunks_exact_mut(4)) {
-                d[0] = s[2];
-                d[1] = s[1];
-                d[2] = s[0];
-                d[3] = 255;
-            }
-        }
+        let rgba = crate::bgra_to_rgba_in_place(data, w, h, stride);
         let decode = t.elapsed();
         latest.publish(Frame { w: cam.w, h: cam.h, rgba, seq, arrived, decode });
         seq += 1;
