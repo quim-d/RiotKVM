@@ -1,7 +1,10 @@
 #include "ble_link.h"
+#include "version.h"
 #include "hid_dev.h"
 #include "sd_msc.h"
 #include "kvm_mode.h"
+#include "led_cfg.h"
+#include "dev_name.h"
 #include "tusb.h"
 #include "esp_timer.h"
 #include "nimble/nimble_port.h"
@@ -18,13 +21,13 @@ extern "C" bool bleInUse(void) { return true; }
 namespace blelink {
 namespace {
 
-constexpr uint8_t PROTO_VER = 1, FW_MAJOR = 1, FW_MINOR = 0;
+constexpr uint8_t PROTO_VER = RIOTKVM_BLE_PROTO, FW_MAJOR = RIOTKVM_FW_MAJOR, FW_MINOR = RIOTKVM_FW_MINOR, FW_PATCH = RIOTKVM_FW_PATCH;
 constexpr uint16_t NONE = 0xFFFF;
 constexpr size_t MAXW = 253;  // ATT_MTU preferido 256 - 3
 
 // op de CMD
 enum : uint8_t { OP_KEY_DOWN = 1, OP_KEY_UP, OP_RELEASE_ALL, OP_MOUSE_REL, OP_MOUSE_ABS, OP_BTN_REL, OP_BTN_ABS, OP_WHEEL,
-                 OP_PING = 0x10, OP_GET_STATE, OP_SET_MODE };
+                 OP_PING = 0x10, OP_GET_STATE, OP_SET_MODE, OP_SET_LED, OP_SET_NAME };
 // op de EVT
 enum : uint8_t { EV_STATE = 0x81, EV_PONG, EV_ERR };
 enum : uint8_t { E_BUSY = 1, E_RANGE, E_UNKNOWN_OP, E_MALFORMED, E_NO_HOST, E_NO_HID, E_BOOT_PROTO, E_ROLLOVER };
@@ -174,6 +177,14 @@ void execute(const uint8_t* d, size_t n) {
         if (len != 1) { err = E_MALFORMED; break; }
         if (!kvmmode::request(p[0])) err = E_RANGE;
         break;
+      case OP_SET_LED:   // mode, r, g, b, bright (sin respuesta; el estado se lee en INFO [8..12])
+        if (len != 5) { err = E_MALFORMED; break; }
+        if (!ledcfg::set(ledcfg::Cfg{p[0], p[1], p[2], p[3], p[4]})) err = E_RANGE;
+        break;
+      case OP_SET_NAME:  // len:u8 + bytes (len 0 = RiotKVM); sin respuesta; el nombre se lee en INFO [13..]
+        if (len < 1 || p[0] != len - 1) { err = E_MALFORMED; break; }
+        if (!devname::set(p + 1, p[0])) err = E_RANGE;
+        break;
       default:
         st.unknown++; err = E_UNKNOWN_OP; break;
     }
@@ -200,9 +211,14 @@ int chrAccess(uint16_t conn, uint16_t, struct ble_gatt_access_ctxt* ctxt, void* 
     return 0;
   }
   if (which == 4 && ctxt->op == BLE_GATT_ACCESS_OP_READ_CHR) {    // INFO
-    uint16_t caps = 0x01 | 0x02 | 0x04 | 0x08 | 0x10 | 0x20;
-    uint8_t b[8] = {PROTO_VER, FW_MAJOR, FW_MINOR, kvmmode::current(), (uint8_t)caps, (uint8_t)(caps >> 8), 0, 0};
-    return os_mbuf_append(ctxt->om, b, sizeof b) == 0 ? 0 : BLE_ATT_ERR_INSUFFICIENT_RES;
+    uint16_t caps = 0x01 | 0x02 | 0x04 | 0x08 | 0x10 | 0x20 | 0x40 | 0x80;   // bit6 = SET_LED, bit7 = SET_NAME
+    ledcfg::Cfg l = ledcfg::get();
+    char nm[devname::MAX_LEN + 1]; devname::get(nm, sizeof nm);
+    size_t nl = strlen(nm);
+    uint8_t b[14 + devname::MAX_LEN] = {PROTO_VER, FW_MAJOR, FW_MINOR, kvmmode::current(), (uint8_t)caps, (uint8_t)(caps >> 8), FW_PATCH, 0,
+                                        l.mode, l.r, l.g, l.b, l.bright, (uint8_t)nl};
+    memcpy(b + 14, nm, nl);
+    return os_mbuf_append(ctxt->om, b, 14 + nl) == 0 ? 0 : BLE_ATT_ERR_INSUFFICIENT_RES;
   }
   return BLE_ATT_ERR_UNLIKELY;
 }
@@ -258,8 +274,10 @@ int gapEvent(struct ble_gap_event* ev, void*) {
 void advStart() {
   static bool configured = false;
   static bool curSlow = false;
+  static uint32_t curName = 0xFFFFFFFF;
   bool wantSlow = g_slowAdv && cur != NONE;
-  if (!configured || curSlow != wantSlow) {
+  uint32_t ng = devname::gen();
+  if (!configured || curSlow != wantSlow || curName != ng) {
     if (configured) ble_gap_ext_adv_stop(0);
     configured = false;
     struct ble_gap_ext_adv_params p = {};
@@ -277,11 +295,11 @@ void advStart() {
     struct os_mbuf* d = os_msys_get_pkthdr(0, 0);
     if (!d || ble_hs_adv_set_fields_mbuf(&f, d) != 0 || (dAdv = ble_gap_ext_adv_set_data(0, d)) != 0) return;
     struct ble_hs_adv_fields r = {};
-    static const char name[] = "QKVM";
-    r.name = (const uint8_t*)name; r.name_len = sizeof(name) - 1; r.name_is_complete = 1;
+    char name[devname::MAX_LEN + 1]; devname::get(name, sizeof name);
+    r.name = (const uint8_t*)name; r.name_len = strlen(name); r.name_is_complete = 1;   // 2 + 20 <= 31 B
     struct os_mbuf* m = os_msys_get_pkthdr(0, 0);
     if (!m || ble_hs_adv_set_fields_mbuf(&r, m) != 0 || (dAdv = ble_gap_ext_adv_rsp_set_data(0, m)) != 0) return;
-    configured = true; curSlow = wantSlow;
+    configured = true; curSlow = wantSlow; curName = ng;
   }
   dAdv = ble_gap_ext_adv_start(0, 0, 0);   // EALREADY(2) si ya anuncia: ignorar
 }
@@ -322,7 +340,8 @@ static void beginImpl() {
   ble_hs_cfg.sm_io_cap = BLE_HS_IO_NO_INPUT_OUTPUT;  // Just Works
   ble_hs_cfg.sm_bonding = 0; ble_hs_cfg.sm_mitm = 0; ble_hs_cfg.sm_sc = 0;
   ble_svc_gap_init(); ble_svc_gatt_init();
-  ble_svc_gap_device_name_set("QKVM");
+  char nm[devname::MAX_LEN + 1]; devname::get(nm, sizeof nm);
+  ble_svc_gap_device_name_set(nm);
   rtcStage = 3;
   ble_att_set_preferred_mtu(247);
   dCount = ble_gatts_count_cfg(svcs);
@@ -358,6 +377,12 @@ int paramDiag(char* b, size_t n) {
   for (uint8_t i = cnt > 8 ? cnt - 8 : 0; i < cnt && k < 100; i++) k += snprintf(hb + k, sizeof hb - k, " %lu:%.1f/%u", (unsigned long)hist[i & 7].ms, hist[i & 7].itvl * 1.25, hist[i & 7].st);
   return snprintf(b, n, "hist(ms:itvl/st)=%s itvl_ms=%.2f lat=%u want_ms=%.2f upd_rc=%d upd_tries=%lu upd_events=%lu slow_adv=%d", hb, itvlUnits() * 1.25, (unsigned)g_lat, g_wantItvl * 1.25, (int)g_updRc,
                   (unsigned long)g_updTries, (unsigned long)g_updEvents, g_slowAdv ? 1 : 0);
+}
+void nameChanged() {   // desde loop(): nombre GAP nuevo y re-anuncio (advStart ve el gen nuevo y reconfigura el scan response)
+  if (dSync <= 0) return;   // BLE sin arrancar: el nombre se toma al arrancar
+  char nm[devname::MAX_LEN + 1]; devname::get(nm, sizeof nm);
+  ble_svc_gap_device_name_set(nm);
+  ble_gap_ext_adv_stop(0); advStart();
 }
 void setSlowAdv(bool on) { g_slowAdv = on; if (cur != NONE) ble_gap_ext_adv_stop(0); advStart(); }
 void setWantItvl(uint16_t u, uint16_t mx) { g_wantItvl = u; g_wantMax = mx; g_updTries = 0; if (cur != NONE) requestParams(cur); }

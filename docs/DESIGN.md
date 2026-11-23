@@ -1,4 +1,4 @@
-# QKVM - identidad visual (fuente única)
+# RiotKVM - identidad visual (fuente única)
 
 Origen: `src/ui_lcd.cpp` y `src/ui_assets.h` (LCD 80x160). La GUI del cliente adopta lo mismo. Si cambia algo, se cambia aquí y en `ui_lcd.cpp`.
 
@@ -20,7 +20,7 @@ Origen: `src/ui_lcd.cpp` y `src/ui_assets.h` (LCD 80x160). La GUI del cliente ad
 A **CARGO** (solo almacenamiento) = ámbar. B **BOARDING** (teclado+ratón) = cian. C **FULL PIRATE** (ambos; en el LCD se muestra "FULL") = verde. Magenta nunca es color de modo: es "enlazado/actividad".
 
 ## 3. Nombres y etiquetas
-- Marca: `QKVM` (mayúsculas, en el LCD en tamaño 2-3). Lemas opcionales: "no cure, no pay", "jolly roger OS".
+- Marca: `RiotKVM` (antes QKVM; en el LCD en tamaño 2: 7 letras = 84 px). Lemas opcionales: "no cure, no pay", "jolly roger OS".
 - Estados, siempre 6 caracteres: `[ OK ]` verde, `[ .. ]` ámbar (esperando), `[FAIL]` rojo, `[ zz ]` ámbar (suspendido), `[idle]` verde / `[used]` magenta (HID).
 - Filas de estado: `usb` (host / wait / sleep), `hid`, `sd` (tamaño, p. ej. `59.6G`, o `no card`), `ble` (`linked` magenta / `scan` ámbar).
 - Cambio de modo: marco ámbar + `! CAMBIANDO RUMBO...`. Prompt: `> `, cursor bloque `_`.

@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=RiotKVM
+GenericName=KVM de bolsillo
+Comment=Vídeo de la capturadora HDMI y teclado/ratón hacia el dongle RiotKVM
+Exec=riotkvm-gui
+Icon=video-display
+Terminal=false
+Categories=Utility;System;
+Keywords=kvm;hdmi;capture;bluetooth;

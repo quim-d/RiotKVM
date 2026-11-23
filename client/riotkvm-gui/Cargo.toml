@@ -1,0 +1,77 @@
+[package]
+name = "riotkvm-gui"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "GUI del KVM: vídeo de la capturadora + captura de teclado y ratón"
+
+[[bin]]
+name = "riotkvm-gui"
+path = "src/main.rs"
+
+[dependencies]
+riotkvm-core = { path = "../riotkvm-core", features = ["ble"] }
+riotkvm-video = { path = "../riotkvm-video" }
+riotkvm-flash = { path = "../riotkvm-flash" }
+clap.workspace = true
+bytemuck = "1"
+eframe = "0.37"
+image = { version = "0.25", default-features = false, features = ["png"] }
+sys-locale = "0.3"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_Threading", "Win32_Security", "Win32_System_DataExchange", "Win32_System_Memory", "Win32_System_LibraryLoader", "Win32_UI_WindowsAndMessaging", "Win32_UI_Input_KeyboardAndMouse"] }
+
+# ---- paquetes Linux (el CI genera antes target/completions/ y construye todo el workspace) ----
+# cargo deb -p riotkvm-gui --no-build   |   cargo generate-rpm -p riotkvm-gui
+[package.metadata.deb]
+name = "riotkvm"
+maintainer = "RiotKVM <noreply@users.noreply.github.com>"
+# el paquete se llamaba quim-dkvm: lo sustituye al actualizar
+conflicts = "quim-dkvm"
+replaces = "quim-dkvm"
+provides = "quim-dkvm"
+section = "utils"
+priority = "optional"
+extended-description = "RiotKVM: KVM de bolsillo. riotkvm (CLI) y riotkvm-gui (vídeo de la capturadora HDMI + teclado y ratón por BLE/serie hacia el dongle)."
+depends = "$auto, libdbus-1-3, libxkbcommon0, libwayland-client0, libx11-6, libgl1 | libvulkan1, bluez"
+recommends = "v4l-utils"
+assets = [
+    ["../target/release/riotkvm", "usr/bin/riotkvm", "755"],
+    ["../target/release/riotkvm-gui", "usr/bin/riotkvm-gui", "755"],
+    ["../target/release/riotkvm-mcp", "usr/bin/riotkvm-mcp", "755"],
+    ["../target/completions/riotkvm.bash", "usr/share/bash-completion/completions/riotkvm", "644"],
+    ["../target/completions/_riotkvm", "usr/share/zsh/vendor-completions/_riotkvm", "644"],
+    ["../target/completions/riotkvm.fish", "usr/share/fish/vendor_completions.d/riotkvm.fish", "644"],
+    ["../../packaging/linux/riotkvm-gui.desktop", "usr/share/applications/riotkvm-gui.desktop", "644"],
+    ["../README.md", "usr/share/doc/riotkvm/README.md", "644"],
+]
+
+[package.metadata.generate-rpm]
+name = "riotkvm"
+summary = "RiotKVM: KVM de bolsillo (CLI riotkvm y GUI riotkvm-gui)"
+url = "https://github.com/quim-d/RiotKVM"
+assets = [
+    { source = "../target/release/riotkvm", dest = "/usr/bin/riotkvm", mode = "755" },
+    { source = "../target/release/riotkvm-gui", dest = "/usr/bin/riotkvm-gui", mode = "755" },
+    { source = "../target/release/riotkvm-mcp", dest = "/usr/bin/riotkvm-mcp", mode = "755" },
+    { source = "../target/completions/riotkvm.bash", dest = "/usr/share/bash-completion/completions/riotkvm", mode = "644" },
+    { source = "../target/completions/_riotkvm", dest = "/usr/share/zsh/site-functions/_riotkvm", mode = "644" },
+    { source = "../target/completions/riotkvm.fish", dest = "/usr/share/fish/vendor_completions.d/riotkvm.fish", mode = "644" },
+    { source = "../../packaging/linux/riotkvm-gui.desktop", dest = "/usr/share/applications/riotkvm-gui.desktop", mode = "644" },
+    { source = "../README.md", dest = "/usr/share/doc/riotkvm/README.md", mode = "644", doc = true },
+]
+[package.metadata.generate-rpm.requires]
+dbus-libs = "*"
+libxkbcommon = "*"
+libwayland-client = "*"
+libX11 = "*"
+bluez = "*"
+# el paquete se llamaba quim-dkvm: dnf lo sustituye al actualizar
+[package.metadata.generate-rpm.obsoletes]
+quim-dkvm = "*"
+[package.metadata.generate-rpm.provides]
+quim-dkvm = "*"
+
+[target.'cfg(windows)'.build-dependencies]
+embed-resource = "3"

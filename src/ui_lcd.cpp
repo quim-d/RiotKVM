@@ -9,6 +9,8 @@
 #include "hid_dev.h"
 #include "sd_msc.h"
 #include "ble_link.h"
+#include "led_cfg.h"
+#include "dev_name.h"
 
 namespace ui {
 namespace {
@@ -60,7 +62,14 @@ void apa(uint8_t r, uint8_t gr, uint8_t b) {
   sh(0xE0 | 4); sh(b); sh(gr); sh(r);
   for (int i = 0; i < 4; i++) sh(0xFF);
 }
+// Ajuste del usuario (ledcfg): AUTO = color por estado (lo de siempre, al 90/255 ~ 35 %); FIXED = su color y brillo
+// (0..100 % del canal, mismo brillo global APA102; 35 % ~ brillo de AUTO); OFF = apagado.
+// Decision: en FIXED el fallo de SD NO pinta rojo. Es una eleccion explicita del usuario y el fallo ya se ve en la
+// pantalla (fila SD) y en `status`/STATE; quien quiera el aviso por color usa AUTO.
 void ledUpdate(bool ble, bool sdFail) {
+  ledcfg::Cfg c = ledcfg::get();
+  if (c.mode == ledcfg::OFF) { apa(0, 0, 0); return; }
+  if (c.mode == ledcfg::FIXED) { apa(c.r * c.bright / 100, c.g * c.bright / 100, c.b * c.bright / 100); return; }
   uint8_t r, gr, b;
   if (sdFail) { r = 255; gr = 0; b = 0; }
   else if (ble) { r = 255; gr = 0; b = 200; }
@@ -110,6 +119,15 @@ int typed(const char* s, int x, int y, uint32_t t, uint32_t t0, uint32_t per, ui
   if (n) { char b[24]; memcpy(b, s, n); b[n] = 0; TX(x, y, b, col, sz); }
   return n;
 }
+// firma "made by quim-d" en GRIS, fuente pequena (TomThumb: 4 px por caracter, 7 filas con descendentes), arrimada a la
+// derecha en la fila y; aparece a los 600 ms de animacion
+void madeBy(int y, uint32_t t) {
+  if (t < 600 || !vis(y, 7)) return;
+  static const char s[] = "made by quim-d";
+  spr.setFont(&fonts::TomThumb); spr.setTextColor(C_GREY); spr.setTextSize(1); spr.setTextDatum(top_left);
+  spr.drawString(s, SW - 2 - 4 * (int)(sizeof s - 1), y - by);
+  spr.setFont(&fonts::Font0);
+}
 // lineas de arranque segun el modo (solo lo que existe en este modo)
 int bootLines(const char** o) {
   int n = 0; o[n++] = "[ OK ] usb";
@@ -119,28 +137,33 @@ int bootLines(const char** o) {
   return n;
 }
 
-// ---- splash (UI_SPLASH_VARIANT: 1 glitch, 2 BIOS, 3 apertura). ~1,2 s, una sola vez ----
+// ---- splash (UI_SPLASH_VARIANT: 1 glitch, 2 BIOS, 3 apertura). ~2 s, una sola vez ----
 void splashV1(uint32_t t) {
   uint32_t fr = t / 40;
   int rows = t >= 380 ? 64 : (int)(t * 64 / 380), gl = t < 520 ? (int)((520 - t) / 70) + 1 : 0;
   skullRows(4, 8, rows, gl, fr);
   if (t < 380) FR(0, 8 + rows, SW, 1, C_GREEN);
   if (t >= 380) eyes(4, 8, t < 700 ? C_GREEN : C_MAG, (t >= 760 && t < 820) || (t >= 980 && t < 1040));
-  if (t >= 300 && t < 800 && hsh(fr, 7) % 100 < 30) { typed("QKVM", 74, 8, t, 300, 60, C_MAG, 3); typed("QKVM", 78, 8, t, 300, 60, C_CYAN, 3); }
-  typed("QKVM", 76, 8, t, 300, 60, C_GREEN, 3);
+  if (t >= 300 && t < 800 && hsh(fr, 7) % 100 < 30) { typed("RiotKVM", 75, 12, t, 300, 45, C_MAG, 2); typed("RiotKVM", 77, 12, t, 300, 45, C_CYAN, 2); }
+  typed("RiotKVM", 76, 12, t, 300, 45, C_GREEN, 2);   // 7 letras a tamano 2: 84 px, justo hasta el borde
   const char* ln[4]; int n = bootLines(ln); if (n > 3) n = 3;
   for (int i = 0; i < n; i++) typed(ln[i], 76, 36 + 10 * i, t, 640 + 140 * i, 20, C_GREEN);
   char m[12]; snprintf(m, sizeof m, "mode %c", kvmmode::letter()); typed(m, 76, 68, t, 1050, 30, C_AMBER);
+  madeBy(1, t);                                         // arriba a la derecha: abajo esta "mode C"
 }
+// tiempos en ms reales (UI_SPLASH_MS = 2000): el texto se escribe rapido y queda completo hacia los 800 ms para poder
+// leerlo; los ultimos 500 ms la calavera parpadea (4 fases de 125 ms, acaba visible)
 void splashV2(uint32_t t) {
   const char* ln[4]; int n = bootLines(ln);
-  typed("> boot", 3, 4, t, 0, 14, C_GREEN);
-  for (int i = 0; i < n; i++) typed(ln[i], 3, 15 + 11 * i, t, 150 * (i + 1), 14, C_GREEN);
-  if (t >= 750 && t < 1000 && ((t / 120) & 1) == 0) FR(3, 15 + 11 * n + 2, 6, 8, C_GREEN);
-  int lvl = t < 450 ? 0 : (int)((t - 450) / 25); if (lvl > 16) lvl = 16;
-  if (lvl) skullDither(90, 8, lvl);
-  if (t >= 850) eyes(90, 8, t < 1050 ? C_CYAN : C_MAG, t >= 1000 && t < 1060);
-  typed("QKVM", 3, 62, t, 900, 40, C_AMBER, 2);
+  typed("> boot", 3, 4, t, 0, 8, C_GREEN);
+  for (int i = 0; i < n; i++) typed(ln[i], 3, 15 + 11 * i, t, 80 * (i + 1), 6, C_GREEN);
+  if (t >= 450 && t < 650 && ((t / 100) & 1) == 0) FR(3, 15 + 11 * n + 2, 6, 8, C_GREEN);
+  bool blinkOff = t >= UI_SPLASH_MS - 500 && (((t - (UI_SPLASH_MS - 500)) / 125) & 1) == 0;
+  int lvl = t < 250 ? 0 : (int)((t - 250) / 20); if (lvl > 16) lvl = 16;
+  if (lvl && !blinkOff) skullDither(90, 8, lvl);
+  if (t >= 570 && !blinkOff) eyes(90, 8, t < 750 ? C_CYAN : C_MAG, false);
+  typed("RiotKVM", 3, 62, t, 600, 20, C_AMBER, 2);
+  madeBy(73, t);                                        // abajo a la derecha: bajo la calavera (filas 8..71), a la derecha del titulo (x <= 87)
 }
 void splashV3(uint32_t t) {
   uint32_t fr = t / 40;
@@ -149,8 +172,9 @@ void splashV3(uint32_t t) {
   skullRows(ox, 8, 64, 0, 0);
   if (half < 32) { FR(0, 0, ox + 32 - half, SH, TFT_BLACK); FR(ox + 32 + half, 0, SW, SH, TFT_BLACK); }
   if (t >= 320) eyes(ox, 8, t < 400 ? C_WHITE : t < 600 ? C_GREEN : t < 800 ? C_CYAN : C_MAG, t >= 880 && t < 940);
-  typed("QKVM", 76, 14, t, 860, 35, C_GREEN, 3); typed("ready_", 76, 44, t, 1000, 30, C_AMBER);
+  typed("RiotKVM", 76, 18, t, 860, 20, C_GREEN, 2); typed("ready_", 76, 44, t, 1000, 30, C_AMBER);
   if (t >= 700 && t < 900 && hsh(fr, 3) % 100 < 40) FR(76, 14 + (int)(hsh(fr, 5) % 24), 74, 1, C_DGREEN);
+  madeBy(73, t);
 }
 
 // ---- pantalla de modo: cabecera (acento) + icono 1 bit + filas segun modo. Estatica; solo se recompone la banda que cambia ----
@@ -181,7 +205,12 @@ void composeStatus() {
   uint8_t m = shownMode; uint16_t ac = accent(m); const Layout& L = LAYOUT[m];
   spr.fillScreen(TFT_BLACK);
   FR(0, 0, SW, 11, ac);
-  char h[16]; snprintf(h, sizeof h, "%c %s", "ABC"[m], modeName(m)); TX(2, 2, h, TFT_BLACK); TX(SW - 2 - 24, 2, "QKVM", TFT_BLACK);
+  char h[16]; snprintf(h, sizeof h, "%c %s", "ABC"[m], modeName(m)); TX(2, 2, h, TFT_BLACK);
+  // nombre del dongle (dev_name) a la derecha; si no cabe tras el modo (1 caracter de hueco), se recorta con '~' al final
+  char nm[devname::MAX_LEN + 1]; devname::get(nm, sizeof nm);
+  int fit = (SW - 2 - 2 - 6 * ((int)strlen(h) + 1)) / 6, nl = strlen(nm);
+  if (nl > fit) { nl = fit; nm[nl - 1] = '~'; nm[nl] = 0; }
+  TX(SW - 2 - 6 * nl, 2, nm, TFT_BLACK);
   BM(4, 20, iconOf(m), uiasset::ICON_W, uiasset::ICON_H, ac);
   TX(4, 64, subOf(m), ac);
   for (int i = 0; i < L.n; i++) rowText(L.top[i] + 2, L.type[i]);
@@ -256,7 +285,7 @@ void uiTask(void*) {
 
   uint32_t t0 = millis(); bool first = true;
   while (millis() - t0 < UI_SPLASH_MS) {
-    splashT = millis() - t0;
+    splashT = (millis() - t0) * UI_SPLASH_ANIM_MS / UI_SPLASH_MS;   // tiempo de animacion (mas lento que el real)
     int64_t a = esp_timer_get_time();
     drawFull(SC_SPLASH);
     noteFrame(a);
@@ -268,7 +297,7 @@ void uiTask(void*) {
   st = Stats{};                                                      // las estadisticas de reposo empiezan tras el splash
 
   uint32_t lastSent = kvmhid::stats().sent, lastRec = blelink::stats().records, busyUntil = 0, lastSig = 0xFFFFFFFF;
-  uint32_t keys[4] = {0, 0, 0, 0}; bool needFull = true;
+  uint32_t keys[4] = {0, 0, 0, 0}, ledGen = ledcfg::gen(), nameGen = devname::gen(); bool needFull = true;
   uint8_t bl = 100; bool shownCourse = false;
   for (;;) {
     ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(100));                   // dormir: course() la despierta; si no, sondeo barato cada 100 ms
@@ -283,6 +312,12 @@ void uiTask(void*) {
     uint32_t idle = now - wakeAt;
     uint8_t want = (UI_OFF_MS && idle >= UI_OFF_MS) ? 0 : (UI_DIM_MS && idle >= UI_DIM_MS) ? 15 : 100;
     if (want != bl) { bl = want; backlight(bl); }                    // un ledcWrite: coste despreciable
+    // cambio de ajuste de la luz: se pinta YA aunque haya actividad (lo pide el usuario y son ~100 flancos de GPIO);
+    // con el estado de la ultima comprobacion (sn), que es el que se ve en pantalla
+    uint32_t lg = ledcfg::gen();
+    if (lg != ledGen) { ledGen = lg; if (lastSig != 0xFFFFFFFF) ledUpdate(sn.ble, sn.sdFail); }
+    uint32_t ng = devname::gen();
+    if (ng != nameGen) { nameGen = ng; needFull = true; }      // nombre nuevo: cabecera
     if (busy) { st.busyUs += (uint32_t)(esp_timer_get_time() - wa); continue; }
 
     sn.ble = blelink::connected(); sn.sdFail = kvmmode::sd() && !sdmsc::ready();

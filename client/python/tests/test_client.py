@@ -10,14 +10,14 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from click.testing import CliRunner
 
-from dkvm import protocol as P
-from dkvm.cli import cli
-from dkvm.errors import DeviceError, TransportError, UsageError
-from dkvm.input import Kvm, abs_from_pixels
-from dkvm.keys import parse_combo
-from dkvm.layouts import get_layout
-from dkvm.script import Context, parse_script, run_script
-from dkvm.transport import MockTransport, SerialTransport
+from riotkvm import protocol as P
+from riotkvm.cli import cli
+from riotkvm.errors import DeviceError, TransportError, UsageError
+from riotkvm.input import Kvm, abs_from_pixels
+from riotkvm.keys import parse_combo
+from riotkvm.layouts import get_layout
+from riotkvm.script import Context, parse_script, run_script
+from riotkvm.transport import MockTransport, SerialTransport
 
 
 def kvm(layout="es"):
@@ -290,14 +290,14 @@ class SerialTransportTests(unittest.TestCase):
 
     def test_autodetect(self):
         ports = [{"port": "COM3", "is_dongle": False}, {"port": "COM9", "is_dongle": True}]
-        with mock.patch("dkvm.transport.serial_cdc.list_ports", return_value=ports):
+        with mock.patch("riotkvm.transport.serial_cdc.list_ports", return_value=ports):
             t = SerialTransport()
             t.open()
         self.assertEqual(t.port, "COM9")
 
     def test_no_dongle(self):
-        from dkvm.errors import DeviceNotFound
-        with mock.patch("dkvm.transport.serial_cdc.list_ports", return_value=[]):
+        from riotkvm.errors import DeviceNotFound
+        with mock.patch("riotkvm.transport.serial_cdc.list_ports", return_value=[]):
             with self.assertRaises(DeviceNotFound):
                 SerialTransport().open()
 
@@ -306,7 +306,7 @@ class CliTests(unittest.TestCase):
     def invoke(self, *args, input=None):
         mt = MockTransport()
         r = CliRunner()
-        with mock.patch("dkvm.cli.MockTransport", return_value=mt):
+        with mock.patch("riotkvm.cli.MockTransport", return_value=mt):
             res = r.invoke(cli, ["-p", "mock", *args], input=input)
         return res, mt
 
@@ -352,23 +352,23 @@ class CliTests(unittest.TestCase):
         self.assertEqual(res.exit_code, 2)
 
     def test_no_dongle_exit_3(self):
-        from dkvm.errors import DeviceNotFound
-        with mock.patch("dkvm.transport.serial_cdc.list_ports", return_value=[]):
+        from riotkvm.errors import DeviceNotFound
+        with mock.patch("riotkvm.transport.serial_cdc.list_ports", return_value=[]):
             res = CliRunner().invoke(cli, ["status"])
         self.assertEqual(res.exit_code, 3)
-        with mock.patch("dkvm.cli.list_ports", return_value=[]):
+        with mock.patch("riotkvm.cli.list_ports", return_value=[]):
             res = CliRunner().invoke(cli, ["--json", "scan"])
         self.assertEqual(res.exit_code, 3)
 
     def test_scan_finds(self):
         ports = [{"port": "COM9", "vid": 0x1209, "pid": 1, "description": "x", "serial_number": "1", "is_dongle": True}]
-        with mock.patch("dkvm.cli.list_ports", return_value=ports):
+        with mock.patch("riotkvm.cli.list_ports", return_value=ports):
             res = CliRunner().invoke(cli, ["--json", "scan"])
         self.assertEqual(res.exit_code, 0)
         self.assertEqual(json.loads(res.stdout)["ports"][0]["port"], "COM9")
 
     def test_run_script_file_and_dry_run(self):
-        with tempfile.NamedTemporaryFile("w", suffix=".dkvm", delete=False, encoding="utf-8") as f:
+        with tempfile.NamedTemporaryFile("w", suffix=".riotkvm", delete=False, encoding="utf-8") as f:
             f.write('layout us\ntype "a"\nstatus\n')
         try:
             res = CliRunner().invoke(cli, ["--json", "run", "--dry-run", f.name])
@@ -385,7 +385,7 @@ class CliTests(unittest.TestCase):
     def test_completion(self):
         res = CliRunner().invoke(cli, ["completion", "bash"])
         self.assertEqual(res.exit_code, 0)
-        self.assertIn("_DKVM_COMPLETE", res.output)
+        self.assertIn("_RIOTKVM_COMPLETE", res.output)
 
 
 if __name__ == "__main__":

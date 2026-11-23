@@ -1,0 +1,24 @@
+[package]
+name = "riotkvm-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "CLI riotkvm: controla el dongle RiotKVM (teclado y ratón del servidor)"
+
+[lib]
+name = "riotkvm_cli"
+path = "src/lib.rs"
+
+[[bin]]
+name = "riotkvm"
+path = "src/main.rs"
+
+[dependencies]
+riotkvm-core = { path = "../riotkvm-core", features = ["ble"] }
+riotkvm-flash = { path = "../riotkvm-flash" }
+clap.workspace = true
+clap_complete.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+tempfile = "3"

@@ -1,0 +1,18 @@
+[package]
+name = "riotkvm-mcp"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Servidor MCP \"Code Mode\" de RiotKVM: el LLM escribe JavaScript contra la API riotkvm (sandbox QuickJS)"
+
+[[bin]]
+name = "riotkvm-mcp"
+path = "src/main.rs"
+
+[dependencies]
+riotkvm-core = { path = "../riotkvm-core", features = ["ble"] }
+riotkvm-video = { path = "../riotkvm-video" }
+serde_json.workspace = true
+rquickjs = "0.14"
+image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
+base64 = "0.22"
