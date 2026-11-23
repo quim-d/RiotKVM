@@ -56,11 +56,7 @@ impl VideoCtl {
 pub const VIDEO_MODES: &[(&str, u32, u32, u32)] = &[("1080p30 · nitidez", 1920, 1080, 30), ("720p60 · fluidez", 1280, 720, 60), ("720p30 · ligero", 1280, 720, 30)];
 
 fn mode_path() -> Option<std::path::PathBuf> {
-    let base = std::env::var_os("DKVM_STATE_DIR")
-        .map(std::path::PathBuf::from)
-        .or_else(|| std::env::var_os("APPDATA").map(|a| std::path::PathBuf::from(a).join("riotkvm")))
-        .or_else(|| std::env::var_os("HOME").map(|h| std::path::PathBuf::from(h).join(".local/state/riotkvm")))?;
-    Some(base.join("video_mode.txt"))
+    Some(riotkvm_core::config::state_dir()?.join("video_mode.txt"))
 }
 
 /// Última resolución elegida en el desplegable ("WxH@fps").

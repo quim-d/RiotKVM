@@ -110,7 +110,7 @@ pub fn sha256_hex(data: &[u8]) -> String {
     hex::encode(sha2::Sha256::digest(data))
 }
 
-/// Directorio de estado/caché del cliente (`~/.local/state/riotkvm`, `%APPDATA%\riotkvm`, `DKVM_STATE_DIR`).
+/// Directorio de estado/caché del cliente (`~/.local/state/riotkvm`, `%APPDATA%\riotkvm`, `RIOTKVM_STATE_DIR`).
 pub fn state_dir() -> Result<std::path::PathBuf> {
     riotkvm_core::config::state_dir().ok_or_else(|| Error::msg("no hay directorio de estado (HOME/APPDATA sin definir)"))
 }

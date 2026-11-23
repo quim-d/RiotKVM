@@ -233,12 +233,12 @@ impl GattConnector for NativeConnector {
 /// Tipo de escritura en CMD. macOS: CON respuesta. Medido el 22/11/2026: tras una ráfaga de movimiento, btleplug 0.13
 /// encola la escritura SIN respuesta esperando `peripheralIsReadyToSendWriteWithoutResponse` y ese aviso no llega: el
 /// enlace se queda mudo (clics y teclas encolados que nunca salen). La escritura con respuesta no usa esa cola.
-/// El firmware acepta las dos (`BLE_GATT_CHR_F_WRITE_NO_RSP | BLE_GATT_CHR_F_WRITE`). `DKVM_BLE_WRITE=norsp|rsp` fuerza una.
+/// El firmware acepta las dos (`BLE_GATT_CHR_F_WRITE_NO_RSP | BLE_GATT_CHR_F_WRITE`). `RIOTKVM_BLE_WRITE=norsp|rsp` fuerza una.
 fn write_type() -> WriteType {
     static T: std::sync::OnceLock<WriteType> = std::sync::OnceLock::new();
-    *T.get_or_init(|| match std::env::var("DKVM_BLE_WRITE").as_deref() {
-        Ok("rsp") => WriteType::WithResponse,
-        Ok("norsp") => WriteType::WithoutResponse,
+    *T.get_or_init(|| match crate::config::env("BLE_WRITE").as_deref() {
+        Some("rsp") => WriteType::WithResponse,
+        Some("norsp") => WriteType::WithoutResponse,
         _ if cfg!(target_os = "macos") => WriteType::WithResponse,
         _ => WriteType::WithoutResponse,
     })
@@ -267,8 +267,8 @@ fn prefer_fast_interval(addr_be: [u8; 6]) -> Option<Box<dyn std::any::Any + Send
     use windows::Devices::Bluetooth::{BluetoothLEDevice, BluetoothLEPreferredConnectionParameters};
     // MEDIDO (2026-11-21): ThroughputOptimized pide 12-12 (x1,25) = 15 ms FIJOS y encima de lo que pide el firmware (7,5 ms),
     // así que empeora (RTT p50 30 ms). Sin petición Windows acepta los 7,5 ms del dongle (RTT p50 15 ms). Por eso por defecto
-    // NO se pide nada; `DKVM_BLE_PARAMS=throughput` la activa solo para pruebas.
-    if std::env::var("DKVM_BLE_PARAMS").map(|v| v != "throughput" && v != "drop").unwrap_or(true) {
+    // NO se pide nada; `RIOTKVM_BLE_PARAMS=throughput` la activa solo para pruebas.
+    if crate::config::env("BLE_PARAMS").map(|v| v != "throughput" && v != "drop").unwrap_or(true) {
         return None;
     }
     let addr = addr_be.iter().fold(0u64, |a, b| (a << 8) | *b as u64);
@@ -276,7 +276,7 @@ fn prefer_fast_interval(addr_be: [u8; 6]) -> Option<Box<dyn std::any::Any + Send
         let dev = BluetoothLEDevice::FromBluetoothAddressAsync(addr)?.join()?;
         let req = dev.RequestPreferredConnectionParameters(&BluetoothLEPreferredConnectionParameters::ThroughputOptimized()?)?;
         let st = req.Status()?;
-        if std::env::var_os("DKVM_BLE_DEBUG").is_some() {
+        if crate::config::env_os("BLE_DEBUG").is_some() {
             let pr = BluetoothLEPreferredConnectionParameters::ThroughputOptimized()?;
             eprintln!("BLE: ThroughputOptimized pide intervalo {}-{} (x1,25 ms), latencia {}, timeout {}", pr.MinConnectionInterval()?, pr.MaxConnectionInterval()?, pr.ConnectionLatency()?, pr.LinkTimeout()?);
             for (n, p) in [("Balanced", BluetoothLEPreferredConnectionParameters::Balanced()?), ("PowerOptimized", BluetoothLEPreferredConnectionParameters::PowerOptimized()?)] {
@@ -302,10 +302,10 @@ fn prefer_fast_interval(addr_be: [u8; 6]) -> Option<Box<dyn std::any::Any + Send
     })();
     match r {
         Ok((dev, req, st)) => {
-            if std::env::var_os("DKVM_BLE_DEBUG").is_some() {
+            if crate::config::env_os("BLE_DEBUG").is_some() {
                 eprintln!("BLE: petición ThroughputOptimized -> estado {st:?}");
             }
-            if std::env::var("DKVM_BLE_PARAMS").map(|v| v == "drop").unwrap_or(false) {
+            if crate::config::env("BLE_PARAMS").map(|v| v == "drop").unwrap_or(false) {
                 drop(req);
                 drop(dev); // prueba: soltar la petición (Windows debería volver al perfil por defecto)
                 return None;
@@ -313,7 +313,7 @@ fn prefer_fast_interval(addr_be: [u8; 6]) -> Option<Box<dyn std::any::Any + Send
             Some(Box::new((dev, req)))
         }
         Err(e) => {
-            if std::env::var_os("DKVM_BLE_DEBUG").is_some() {
+            if crate::config::env_os("BLE_DEBUG").is_some() {
                 eprintln!("BLE: no se pudo pedir intervalo corto: {e}");
             }
             None

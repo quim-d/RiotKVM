@@ -1,17 +1,17 @@
 //! Backend ffmpeg: tubería rawvideo RGBA con búfer mínimo.
 //!
 //! `ffmpeg -fflags nobuffer -flags low_delay -probesize 32 -analyzeduration 0 -f dshow ... -f rawvideo -`
-//! Requiere `ffmpeg` en el PATH (o `DKVM_FFMPEG=ruta`). Es el comparador/alternativa de `native`.
+//! Requiere `ffmpeg` en el PATH (o `RIOTKVM_FFMPEG=ruta`). Es el comparador/alternativa de `native`.
 
 use crate::{Frame, Latest, Mode};
 use std::io::Read;
 use std::process::{Child, ChildStdout, Command, Stdio};
 use std::time::{Duration, Instant};
 
-/// Ruta de ffmpeg: `DKVM_FFMPEG`, o búsqueda manual en el PATH. Rust no resuelve los enlaces de
+/// Ruta de ffmpeg: `RIOTKVM_FFMPEG`, o búsqueda manual en el PATH. Rust no resuelve los enlaces de
 /// WinGet (`...\WinGet\Linksfmpeg.exe`, reparse point) al lanzar procesos; aquí sí.
 pub fn exe() -> String {
-    if let Ok(v) = std::env::var("DKVM_FFMPEG") {
+    if let Some(v) = riotkvm_core::config::env("FFMPEG") {
         return v;
     }
     let name = if cfg!(windows) { "ffmpeg.exe" } else { "ffmpeg" };

@@ -3,12 +3,7 @@
 use std::path::PathBuf;
 
 fn path() -> Option<PathBuf> {
-    let base = std::env::var_os("DKVM_STATE_DIR")
-        .map(PathBuf::from)
-        .or_else(|| std::env::var_os("APPDATA").map(|a| PathBuf::from(a).join("riotkvm")))
-        .or_else(|| std::env::var_os("XDG_STATE_HOME").map(|a| PathBuf::from(a).join("riotkvm")))
-        .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".local/state/riotkvm")))?;
-    Some(base.join("ble_last.txt"))
+    Some(crate::config::state_dir()?.join("ble_last.txt"))
 }
 
 pub fn load() -> Option<String> {

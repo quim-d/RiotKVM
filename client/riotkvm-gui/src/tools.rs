@@ -189,12 +189,12 @@ impl Tools {
     /// Dibuja la ventana si está abierta.
     pub fn show(&mut self, ctx: &egui::Context) {
         if !self.env_checked {
-            // (pruebas/capturas) DKVM_GUI_TOOLS=fw|sd abre la ventana al arrancar
+            // (pruebas/capturas) RIOTKVM_GUI_TOOLS=fw|sd abre la ventana al arrancar
             self.env_checked = true;
             self.riotkvm_theme = true;
-            match std::env::var("DKVM_GUI_TOOLS").as_deref() {
-                Ok("fw") => self.open = true,
-                Ok("sd") => {
+            match riotkvm_core::config::env("GUI_TOOLS").as_deref() {
+                Some("fw") => self.open = true,
+                Some("sd") => {
                     self.open = true;
                     self.tab = Tab::Sd;
                     self.refresh_disks(ctx);

@@ -142,11 +142,11 @@ mod tests {
         assert!(Package::from_tarball(&t).is_err());
     }
 
-    /// Con el tar.gz real en `DKVM_VENTOY_TGZ` (no se descarga en los tests).
+    /// Con el tar.gz real en `RIOTKVM_VENTOY_TGZ` (no se descarga en los tests).
     #[test]
     #[ignore]
     fn real_tarball() {
-        let p = std::env::var("DKVM_VENTOY_TGZ").expect("DKVM_VENTOY_TGZ");
+        let p = riotkvm_core::config::env("VENTOY_TGZ").expect("RIOTKVM_VENTOY_TGZ");
         let d = std::fs::read(p).unwrap();
         assert_eq!(crate::sha256_hex(&d), SHA256);
         let pkg = Package::from_tarball(&d).unwrap();

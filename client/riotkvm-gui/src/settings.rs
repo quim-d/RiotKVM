@@ -3,7 +3,7 @@
 //!
 //! Compatibilidad con el SO destino (comprobado con hardware): Fedora no reacciona a los botones del informe ABSOLUTO;
 //! el macOS destino solo reacciona a ellos; Windows funciona con los botones por el ratón relativo (el defecto).
-//! Se guarda en `target.txt` (directorio de estado de `riotkvm_core::config`); `DKVM_ABS_BUTTONS` manda al arrancar.
+//! Se guarda en `target.txt` (directorio de estado de `riotkvm_core::config`); `RIOTKVM_ABS_BUTTONS` manda al arrancar.
 
 use crate::{dlog, hook, theme};
 use riotkvm_core::session::{abs_buttons_env_override, SessionOpts, TargetOs};
@@ -68,7 +68,7 @@ impl Compat {
     }
 }
 
-/// Opciones con las que arranca la sesión: `DKVM_ABS_BUTTONS` > lo guardado > Windows (clics por el relativo).
+/// Opciones con las que arranca la sesión: `RIOTKVM_ABS_BUTTONS` > lo guardado > Windows (clics por el relativo).
 pub fn initial_session_opts() -> SessionOpts {
     match abs_buttons_env_override() {
         Some(v) => SessionOpts { abs_buttons_via_rel: v },
@@ -110,7 +110,7 @@ pub struct Settings {
     pub open: bool,
     tab: Tab,
     compat: Compat,
-    /// `DKVM_ABS_BUTTONS` fijó el arranque (se muestra el aviso hasta que se elija otra cosa aquí).
+    /// `RIOTKVM_ABS_BUTTONS` fijó el arranque (se muestra el aviso hasta que se elija otra cosa aquí).
     env_note: Option<bool>,
 }
 
@@ -180,7 +180,7 @@ impl Settings {
             let msg = if self.compat.os == Some(TargetOs::Macos) { "Ratón en rel: en macOS el clic no funciona, usa abs." } else { "Ratón en rel: este ajuste no se aplica." };
             ui.colored_label(theme::AMBAR, msg);
         } else if self.env_note.is_some() {
-            ui.colored_label(theme::AMBAR, "DKVM_ABS_BUTTONS fijó el arranque.");
+            ui.colored_label(theme::AMBAR, "RIOTKVM_ABS_BUTTONS fijó el arranque.");
         }
         if self.compat == before {
             return None;

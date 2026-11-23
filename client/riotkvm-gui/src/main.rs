@@ -27,10 +27,10 @@ use std::time::Duration;
 #[command(version, about = "KVM de bolsillo: vídeo + teclado/ratón", after_help = "Captura: clic en el vídeo. Liberar: Ctrl+Shift+F12.\nCtrl+Alt+Supr y Win+L no se pueden interceptar en Windows: usa el menú Enviar.")]
 struct Args {
     /// 'auto' (BLE, se reconecta solo; si no hay adaptador BLE, serie), 'ble', COM7 o /dev/ttyACM0 (serie), 'mock' o 'ble-mock' (dongle BLE simulado)
-    #[arg(short, long, env = "DKVM_PORT", default_value = "auto")]
+    #[arg(short, long, env = "RIOTKVM_PORT", default_value = "auto")]
     port: String,
     /// Distribución del teclado del servidor (es, us, gb, de, fr, it, pt, latam). Por defecto la guardada (selector de la GUI), si no `es`
-    #[arg(short, long, env = "DKVM_LAYOUT")]
+    #[arg(short, long, env = "RIOTKVM_LAYOUT")]
     layout: Option<String>,
     /// Atajo local para teclear el portapapeles en el servidor: ctrl+shift+v (defecto) | ctrl+alt+v | ctrl+shift+insert | off
     #[arg(long, default_value = "ctrl+shift+v")]
@@ -69,7 +69,7 @@ struct Args {
     #[arg(long)]
     start_captured: bool,
     /// Registro de diagnóstico (captura, teclas, botones, errores del dongle) en este fichero
-    #[arg(long, env = "DKVM_GUI_LOG")]
+    #[arg(long, env = "RIOTKVM_GUI_LOG")]
     log: Option<std::path::PathBuf>,
     /// Vuelve a vsync y cola de 2 cuadros de egui (más suave, ~1-2 cuadros más de latencia de presentación)
     #[arg(long)]
@@ -86,17 +86,18 @@ struct Args {
 }
 
 fn main() -> eframe::Result {
+    riotkvm_core::config::adopt_legacy_env(); // DKVM_PORT, DKVM_LAYOUT... (nombre anterior) siguen valiendo
     let a = Args::parse();
     if a.video_list {
         print!("{}", riotkvm_video::diagnostic_report());
         return Ok(());
     }
-    if std::env::var_os("DKVM_ALLOW_MULTI").is_none() && !single_instance() {
+    if riotkvm_core::config::env_os("ALLOW_MULTI").is_none() && !single_instance() {
         eprintln!("riotkvm-gui: ya hay otra ventana de riotkvm-gui abierta (comparten capturadora y enlace BLE: un segundo cliente desplaza al primero). Ciérrala primero.");
         std::process::exit(2);
     }
     if let Some(secs) = a.hook_test {
-        std::env::set_var("DKVM_HOOK_DEBUG", "1");
+        std::env::set_var("RIOTKVM_HOOK_DEBUG", "1");
         let (tx, _rx) = std::sync::mpsc::channel();
         let ok = hook::install(tx, || {});
         println!("hook instalado: {ok}. Escribe en cualquier ventana durante {secs} s...");

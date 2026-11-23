@@ -109,7 +109,7 @@ pub struct BleOptions {
     /// Plazo de `open()` bloqueante (CLI). 0 = no bloquea (GUI).
     pub open_timeout: Duration,
     pub reply_timeout: Duration,
-    /// Hueco mínimo entre escrituras de movimiento puro (~medio intervalo BLE). `DKVM_BLE_MOVE_GAP_US` lo cambia.
+    /// Hueco mínimo entre escrituras de movimiento puro (~medio intervalo BLE). `RIOTKVM_BLE_MOVE_GAP_US` lo cambia.
     pub move_gap: Duration,
 }
 
@@ -119,7 +119,7 @@ impl Default for BleOptions {
             backoff: [100, 200, 400, 800, 1000].iter().map(|m| Duration::from_millis(*m)).collect(),
             open_timeout: Duration::ZERO,
             reply_timeout: Duration::from_secs(2),
-            move_gap: Duration::from_micros(std::env::var("DKVM_BLE_MOVE_GAP_US").ok().and_then(|v| v.parse().ok()).unwrap_or(7000)),
+            move_gap: Duration::from_micros(crate::config::env("BLE_MOVE_GAP_US").and_then(|v| v.parse().ok()).unwrap_or(7000)),
         }
     }
 }

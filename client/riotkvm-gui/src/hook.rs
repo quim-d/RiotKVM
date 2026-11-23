@@ -134,7 +134,7 @@ mod win {
     // mientras teclea el portapapeles: se traga todo (no se mezcla con el pegado) y Esc cancela
     static BLOCKED: AtomicBool = AtomicBool::new(false);
     static PASTE_CHORD: AtomicU8 = AtomicU8::new(1);
-    // solo pruebas (DKVM_HOOK_INJECTED=1): acepta teclas inyectadas con SendInput
+    // solo pruebas (RIOTKVM_HOOK_INJECTED=1): acepta teclas inyectadas con SendInput
     static TESTKEYS: AtomicBool = AtomicBool::new(false);
     static DEBUG: AtomicBool = AtomicBool::new(false);
     static ACCEPT_INJECTED: AtomicBool = AtomicBool::new(true);
@@ -142,7 +142,7 @@ mod win {
     static TX: OnceLock<Sender<Cmd>> = OnceLock::new();
     static REPAINT: OnceLock<Box<dyn Fn() + Send + Sync>> = OnceLock::new();
 
-    /// Solo pruebas (DKVM_HOOK_TESTKEYS=1): F13..F24 se tratan como "de nuestra ventana" aunque no tenga el foco,
+    /// Solo pruebas (RIOTKVM_HOOK_TESTKEYS=1): F13..F24 se tratan como "de nuestra ventana" aunque no tenga el foco,
     /// para poder verificar el hook sin robar el foco ni tragarse teclas reales del usuario.
     fn test_key(vk: u32) -> bool {
         TESTKEYS.load(Relaxed) && (0x7B..=0x87).contains(&vk)
@@ -334,10 +334,10 @@ mod win {
             return true; // ya instalado
         }
         let _ = REPAINT.set(Box::new(repaint));
-        TESTKEYS.store(std::env::var_os("DKVM_HOOK_TESTKEYS").is_some(), Relaxed);
-        DEBUG.store(std::env::var_os("DKVM_HOOK_DEBUG").is_some(), Relaxed);
-        // teclas "inyectadas" (PowerToys, AutoHotkey, escritorio remoto, teclados con software) también cuentan; DKVM_HOOK_NOINJECTED=1 las filtra
-        ACCEPT_INJECTED.store(std::env::var_os("DKVM_HOOK_NOINJECTED").is_none(), Relaxed);
+        TESTKEYS.store(riotkvm_core::config::env_os("HOOK_TESTKEYS").is_some(), Relaxed);
+        DEBUG.store(riotkvm_core::config::env_os("HOOK_DEBUG").is_some(), Relaxed);
+        // teclas "inyectadas" (PowerToys, AutoHotkey, escritorio remoto, teclados con software) también cuentan; RIOTKVM_HOOK_NOINJECTED=1 las filtra
+        ACCEPT_INJECTED.store(riotkvm_core::config::env_os("HOOK_NOINJECTED").is_none(), Relaxed);
         let (rtx, rrx) = std::sync::mpsc::channel();
         std::thread::Builder::new()
             .name("riotkvm-hook".into())

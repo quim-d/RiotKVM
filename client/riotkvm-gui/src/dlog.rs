@@ -1,4 +1,4 @@
-//! Registro de diagnóstico opcional (`--log FICHERO` o `DKVM_GUI_LOG`): una línea por suceso con ms desde el arranque.
+//! Registro de diagnóstico opcional (`--log FICHERO` o `RIOTKVM_GUI_LOG`): una línea por suceso con ms desde el arranque.
 //! Sin fichero configurado no hace nada (un `OnceLock` leído).
 
 use std::io::Write;

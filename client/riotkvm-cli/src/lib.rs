@@ -56,7 +56,7 @@ fn put(w: &SharedWriter, s: &str) {
 pub struct Cli {
     /// Puerto serie (COM5, /dev/ttyACM0), 'ble', 'mock' o 'ble-mock' (dongle BLE simulado).
     /// Por defecto: BLE si hay un dongle anunciando; si no, serie (autodetecta VID 1209:0001).
-    #[arg(short, long, global = true, env = "DKVM_PORT")]
+    #[arg(short, long, global = true, env = "RIOTKVM_PORT")]
     port: Option<String>,
     /// Fuerza BLE (equivale a -p ble). Con `scan`, escanea por BLE.
     #[arg(long, global = true)]
@@ -68,10 +68,10 @@ pub struct Cli {
     #[arg(long, global = true, default_value_t = 8.0, value_name = "SEG")]
     ble_timeout: f64,
     /// Distribución de teclado del equipo DESTINO (es, us, gb, de, fr, it, pt, latam). Por defecto la guardada por la GUI (`%APPDATA%\riotkvm\layout.txt`), si no `es`.
-    #[arg(short, long, global = true, env = "DKVM_LAYOUT")]
+    #[arg(short, long, global = true, env = "RIOTKVM_LAYOUT")]
     layout: Option<String>,
     /// Resolución del destino ANCHOxALTO: las coordenadas absolutas pasan a ser píxeles.
-    #[arg(long, global = true, env = "DKVM_SCREEN")]
+    #[arg(long, global = true, env = "RIOTKVM_SCREEN")]
     screen: Option<String>,
     /// Salida JSON en stdout (errores incluidos).
     #[arg(long = "json", global = true)]

@@ -122,7 +122,7 @@ fn run_inner(name: Option<&str>, index: Option<usize>, mode: &Mode, latest: &Lat
     latest.set_info(format!("nokhwa {:?} {}x{}@{}", f.format(), f.width(), f.height(), f.frame_rate()));
     let mut seq = 0u64;
     let mut bad = 0u32;
-    let fast = std::env::var_os("DKVM_DECODE_HQ").is_none(); // rápida por defecto; DKVM_DECODE_HQ=1 = calidad (upsampling fancy)
+    let fast = riotkvm_core::config::env_os("DECODE_HQ").is_none(); // rápida por defecto; RIOTKVM_DECODE_HQ=1 = calidad (upsampling fancy)
     while !latest.stopped() {
         let buf = match cam.frame() {
             Ok(b) => b,

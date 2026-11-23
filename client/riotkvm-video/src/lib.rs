@@ -324,7 +324,7 @@ pub fn diagnostic_report() -> String {
 /// Arranca la fuente en un hilo; los cuadros llegan a `latest`.
 pub fn start(src: &Source, mode: &Mode, latest: Arc<Latest>) -> std::thread::JoinHandle<()> {
     let (src, mode) = (src.clone(), mode.clone());
-    let retry = std::env::var_os("DKVM_VIDEO_NORETRY").is_none();
+    let retry = riotkvm_core::config::env_os("VIDEO_NORETRY").is_none();
     std::thread::Builder::new()
         .name("riotkvm-video".into())
         .spawn(move || {

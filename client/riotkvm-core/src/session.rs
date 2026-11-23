@@ -64,7 +64,7 @@ impl std::fmt::Debug for PasteJob {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SessionOpts {
     /// En modo ABSOLUTO, botones y rueda salen por el ratón RELATIVO (`mbr`, rueda `mm`) justo tras el `ma` de la posición.
-    /// Defecto true (workaround: el Fedora no reacciona a los botones del informe absoluto). `DKVM_ABS_BUTTONS=abs` lo desactiva.
+    /// Defecto true (workaround: el Fedora no reacciona a los botones del informe absoluto). `RIOTKVM_ABS_BUTTONS=abs` lo desactiva.
     /// Se cambia en caliente con `Cmd::SetOpts` (la GUI lo elige según el sistema del equipo controlado, ver `TargetOs`).
     pub abs_buttons_via_rel: bool,
 }
@@ -75,14 +75,14 @@ impl Default for SessionOpts {
     }
 }
 
-/// `DKVM_ABS_BUTTONS`: `abs` -> botones por el informe absoluto (false); cualquier otro valor -> por el relativo (true).
+/// `RIOTKVM_ABS_BUTTONS`: `abs` -> botones por el informe absoluto (false); cualquier otro valor -> por el relativo (true).
 pub fn parse_abs_buttons(v: &str) -> bool {
     v.trim() != "abs"
 }
 
-/// Override del entorno (`DKVM_ABS_BUTTONS`), si está definido: manda sobre lo guardado al arrancar.
+/// Override del entorno (`RIOTKVM_ABS_BUTTONS`), si está definido: manda sobre lo guardado al arrancar.
 pub fn abs_buttons_env_override() -> Option<bool> {
-    std::env::var("DKVM_ABS_BUTTONS").ok().map(|v| parse_abs_buttons(&v))
+    crate::config::env("ABS_BUTTONS").map(|v| parse_abs_buttons(&v))
 }
 
 /// Sistema del equipo controlado: preajuste de compatibilidad para los clics y la rueda del ratón ABSOLUTO.
@@ -644,7 +644,7 @@ mod tests {
 
     #[test]
     fn connects_polls_status_and_sends_in_order() {
-        std::env::set_var("DKVM_ABS_BUTTONS", "abs"); // estas pruebas miden el camino absoluto original
+        std::env::set_var("RIOTKVM_ABS_BUTTONS", "abs"); // estas pruebas miden el camino absoluto original
         let (s, h) = mock_session();
         let ev = s.events.recv_timeout(Duration::from_secs(20)).unwrap();
         assert!(matches!(ev, Event::Link(LinkState::Connected { .. })));
@@ -662,7 +662,7 @@ mod tests {
 
     #[test]
     fn mouse_moves_coalesce_and_keep_order_around_buttons() {
-        std::env::set_var("DKVM_ABS_BUTTONS", "abs"); // estas pruebas miden el camino absoluto original
+        std::env::set_var("RIOTKVM_ABS_BUTTONS", "abs"); // estas pruebas miden el camino absoluto original
         let (s, h) = mock_session();
         let _ = s.events.recv_timeout(Duration::from_secs(20));
         // Determinista: el hilo de sesión queda ocupado en una repetición (no drena la cola hasta que se cancela); se encola
@@ -765,7 +765,7 @@ mod tests {
 
     #[test]
     fn works_over_simulated_ble_with_state_events_and_reconnection() {
-        std::env::set_var("DKVM_ABS_BUTTONS", "abs"); // estas pruebas miden el camino absoluto original
+        std::env::set_var("RIOTKVM_ABS_BUTTONS", "abs"); // estas pruebas miden el camino absoluto original
         use crate::transport::ble::BleOptions;
         let slot: Arc<Mutex<Option<(crate::transport::ble::BleTransport, crate::ble_v1::sim::Sim, crate::transport::ble::mockble::MockDongle)>>> =
             Arc::new(Mutex::new(Some(crate::transport::select::ble_sim(BleOptions { backoff: vec![Duration::from_millis(5)], ..BleOptions::default() }))));
@@ -830,7 +830,7 @@ mod tests {
     /// aunque haya una tormenta de movimiento alrededor (fusión de 7 ms del hilo BLE y fusión de la sesión).
     #[test]
     fn absolute_click_is_never_lost_or_reordered_by_motion_merging() {
-        abs_click_rounds(false); // camino original: botones por el informe absoluto (DKVM_ABS_BUTTONS=abs)
+        abs_click_rounds(false); // camino original: botones por el informe absoluto (RIOTKVM_ABS_BUTTONS=abs)
     }
 
     /// Workaround por defecto: ma x y -> mbr 1 -> ma x y -> mbr 0 (los botones salen por el ratón relativo).
