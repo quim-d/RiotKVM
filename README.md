@@ -35,11 +35,11 @@ El script pone el dongle en modo descarga con el comando serie `bootloader` y fl
 
 ### Versión del firmware
 
-La versión (semver) está **solo** en `src/version.h` (`QKVM_FW_MAJOR/MINOR/PATCH`); el dongle la publica en `info` por CDC (`fw=X.Y.Z`) y en INFO por BLE. Es independiente de la del cliente (`client/Cargo.toml`). Al etiquetar `vX.Y.Z`, el CI compila el firmware y lo adjunta a la release como `qkvm-fw-<versión>.factory.bin` (el mismo `firmware.factory.bin` que usa `tools/flash.py`), junto con `manifest.json`: versión del cliente, versión del firmware, `proto`, nombre del asset y su SHA-256.
+La versión (semver) está **solo** en `src/version.h` (`RIOTKVM_FW_MAJOR/MINOR/PATCH`); el dongle la publica en `info` por CDC (`fw=X.Y.Z`) y en INFO por BLE. Es independiente de la del cliente (`client/Cargo.toml`). Al etiquetar `vX.Y.Z`, el CI compila el firmware y lo adjunta a la release como `riotkvm-fw-<versión>.factory.bin` (el mismo `firmware.factory.bin` que usa `tools/flash.py`), junto con `manifest.json`: versión del cliente, versión del firmware, `proto`, nombre del asset y su SHA-256.
 
 ## BLE
 
-Nombre `QKVM`. Servicio `7d0d1000-9b6e-4b7a-8d3f-2a5c6e1f0001`; características CMD (`…0002`, escritura sin respuesta), EVT (`…0003`, notificación) e INFO (`…0004`, lectura). Detalle en `docs/PROTOCOL.md`.
+Nombre `RiotKVM` (firmwares anteriores: `QKVM`; el cliente acepta ambos). Servicio `7d0d1000-9b6e-4b7a-8d3f-2a5c6e1f0001`; características CMD (`…0002`, escritura sin respuesta), EVT (`…0003`, notificación) e INFO (`…0004`, lectura). Detalle en `docs/PROTOCOL.md`.
 
 ## Estado
 
