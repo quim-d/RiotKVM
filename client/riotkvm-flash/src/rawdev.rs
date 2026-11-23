@@ -113,6 +113,9 @@ impl BlockDev for FileDev {
     fn write_at(&mut self, off: u64, data: &[u8]) -> Result<()> {
         use std::os::windows::fs::FileExt;
         check_align(off, data.len())?;
+        if off + data.len() as u64 > self.size {
+            return Err(Error::msg("escritura fuera del disco"));
+        }
         let mut done = 0;
         while done < data.len() {
             done += self.f.seek_write(&data[done..], off + done as u64)?;

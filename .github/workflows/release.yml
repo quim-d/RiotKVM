@@ -241,7 +241,8 @@ jobs:
       - name: Empaquetar
         run: |
           B=.pio/build/tdongle-s3/firmware.factory.bin
-          if ! grep -aqF "fw=${{ steps.ver.outputs.v }} name=RiotKVM proto=${{ steps.ver.outputs.proto }} " "$B"; then
+          # el nombre del dongle es configurable: el binario lleva la plantilla "fw=X.Y.Z name=%s proto=P "
+          if ! grep -aqF "fw=${{ steps.ver.outputs.v }} name=%s proto=${{ steps.ver.outputs.proto }} " "$B"; then
             echo "::error::el binario no contiene fw=${{ steps.ver.outputs.v }} proto=${{ steps.ver.outputs.proto }} (¿src/version.h con otro formato?)"; exit 1
           fi
           mkdir -p dist
