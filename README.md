@@ -1,4 +1,4 @@
-# quim-dkvm
+# RiotKVM
 
 KVM de bolsillo sobre un **LilyGO T-Dongle-S3 (ESP32-S3)**. El dongle se enchufa al servidor y ofrece:
 

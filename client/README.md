@@ -283,14 +283,14 @@ Cada etiqueta `vX.Y.Z` publica estos ficheros (más `SHA256SUMS.txt`; verifica c
 
 | Sistema | Fichero | Cómo instalar |
 |---|---|---|
-| Windows 10/11 x64 | `quim-dkvm-X.Y.Z-windows-x86_64.zip` | Descomprime y ejecuta `dkvm-gui.exe` / `dkvm.exe` (opcional: añade la carpeta al `PATH`). Incluye `vidbench.exe` (banco de vídeo). SmartScreen puede avisar al ser un binario sin firmar: "Más información > Ejecutar de todas formas". |
-| Ubuntu / Debian | `quim-dkvm_X.Y.Z_amd64.deb` | `sudo apt install ./quim-dkvm_X.Y.Z_amd64.deb` (compilado en Ubuntu 22.04, glibc 2.35: Ubuntu 22.04+, Debian 12+). |
-| Fedora / RHEL-like | `quim-dkvm-X.Y.Z-1.x86_64.rpm` | `sudo dnf install ./quim-dkvm-X.Y.Z-1.x86_64.rpm` |
+| Windows 10/11 x64 | `riotkvm-X.Y.Z-windows-x86_64.zip` | Descomprime y ejecuta `dkvm-gui.exe` / `dkvm.exe` (opcional: añade la carpeta al `PATH`). Incluye `vidbench.exe` (banco de vídeo). SmartScreen puede avisar al ser un binario sin firmar: "Más información > Ejecutar de todas formas". |
+| Ubuntu / Debian | `riotkvm_X.Y.Z_amd64.deb` | `sudo apt install ./riotkvm_X.Y.Z_amd64.deb` (compilado en Ubuntu 22.04, glibc 2.35: Ubuntu 22.04+, Debian 12+). |
+| Fedora / RHEL-like | `riotkvm-X.Y.Z-1.x86_64.rpm` | `sudo dnf install ./riotkvm-X.Y.Z-1.x86_64.rpm` |
 | Arch Linux | `packaging/arch/PKGBUILD` | Compila desde la fuente de la release: copia el `PKGBUILD`, pon `_owner=` (usuario/organización del repo), `updpkgsums && makepkg -si`. |
-| Linux genérico x86_64 | `quim-dkvm-X.Y.Z-linux-x86_64.tar.gz` | `tar xf ...; sudo install -m755 */dkvm */dkvm-gui /usr/local/bin/` (autocompletado de shell en `completions/`). |
-| macOS Intel | `quim-dkvm-X.Y.Z-macos-x86_64.dmg` | Arrastra `QKVM.app` a Aplicaciones. |
-| macOS Apple Silicon | `quim-dkvm-X.Y.Z-macos-arm64.dmg` | Igual. |
-| CLI en macOS | `quim-dkvm-cli-X.Y.Z-macos-<arch>.tar.gz` | Solo `dkvm` (también va dentro del `.dmg`). |
+| Linux genérico x86_64 | `riotkvm-X.Y.Z-linux-x86_64.tar.gz` | `tar xf ...; sudo install -m755 */dkvm */dkvm-gui /usr/local/bin/` (autocompletado de shell en `completions/`). |
+| macOS Intel | `riotkvm-X.Y.Z-macos-x86_64.dmg` | Arrastra `RiotKVM.app` a Aplicaciones. |
+| macOS Apple Silicon | `riotkvm-X.Y.Z-macos-arm64.dmg` | Igual. |
+| CLI en macOS | `riotkvm-cli-X.Y.Z-macos-<arch>.tar.gz` | Solo `dkvm` (también va dentro del `.dmg`). |
 
 **macOS sin Developer ID.** La app está firmada ad-hoc (`codesign -s -`), no notarizada: Gatekeeper dirá "no se puede verificar al desarrollador". Abre con clic derecho > Abrir > Abrir (una vez), o `xattr -cr /Applications/QKVM.app` (y `xattr -d com.apple.quarantine dkvm` para el CLI). El `Info.plist` declara `NSCameraUsageDescription` y `NSBluetoothAlwaysUsageDescription` (sin ellos macOS cierra la app al usar cámara o BLE); la primera vez pide permiso de Cámara y Bluetooth. Limitación: la GUI en macOS recibe el teclado por eventos de la ventana (no hay hook de bajo nivel): Cmd+Tab, Mission Control, etc. los trata el sistema; usa el menú "Enviar teclas".
 

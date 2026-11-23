@@ -24,11 +24,15 @@ windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_
 # ---- paquetes Linux (el CI genera antes target/completions/ y construye todo el workspace) ----
 # cargo deb -p dkvm-gui --no-build   |   cargo generate-rpm -p dkvm-gui
 [package.metadata.deb]
-name = "quim-dkvm"
-maintainer = "quim-dkvm <noreply@users.noreply.github.com>"
+name = "riotkvm"
+maintainer = "RiotKVM <noreply@users.noreply.github.com>"
+# el paquete se llamaba quim-dkvm: lo sustituye al actualizar
+conflicts = "quim-dkvm"
+replaces = "quim-dkvm"
+provides = "quim-dkvm"
 section = "utils"
 priority = "optional"
-extended-description = "QKVM: KVM de bolsillo. dkvm (CLI) y dkvm-gui (vídeo de la capturadora HDMI + teclado y ratón por BLE/serie hacia el dongle)."
+extended-description = "RiotKVM: KVM de bolsillo. dkvm (CLI) y dkvm-gui (vídeo de la capturadora HDMI + teclado y ratón por BLE/serie hacia el dongle)."
 depends = "$auto, libdbus-1-3, libxkbcommon0, libwayland-client0, libx11-6, libgl1 | libvulkan1, bluez"
 recommends = "v4l-utils"
 assets = [
@@ -38,13 +42,13 @@ assets = [
     ["../target/completions/_dkvm", "usr/share/zsh/vendor-completions/_dkvm", "644"],
     ["../target/completions/dkvm.fish", "usr/share/fish/vendor_completions.d/dkvm.fish", "644"],
     ["../../packaging/linux/dkvm-gui.desktop", "usr/share/applications/dkvm-gui.desktop", "644"],
-    ["../README.md", "usr/share/doc/quim-dkvm/README.md", "644"],
+    ["../README.md", "usr/share/doc/riotkvm/README.md", "644"],
 ]
 
 [package.metadata.generate-rpm]
-name = "quim-dkvm"
-summary = "QKVM: KVM de bolsillo (CLI dkvm y GUI dkvm-gui)"
-url = "https://github.com/"
+name = "riotkvm"
+summary = "RiotKVM: KVM de bolsillo (CLI dkvm y GUI dkvm-gui)"
+url = "https://github.com/quim-d/RiotKVM"
 assets = [
     { source = "../target/release/dkvm", dest = "/usr/bin/dkvm", mode = "755" },
     { source = "../target/release/dkvm-gui", dest = "/usr/bin/dkvm-gui", mode = "755" },
@@ -52,7 +56,7 @@ assets = [
     { source = "../target/completions/_dkvm", dest = "/usr/share/zsh/site-functions/_dkvm", mode = "644" },
     { source = "../target/completions/dkvm.fish", dest = "/usr/share/fish/vendor_completions.d/dkvm.fish", mode = "644" },
     { source = "../../packaging/linux/dkvm-gui.desktop", dest = "/usr/share/applications/dkvm-gui.desktop", mode = "644" },
-    { source = "../README.md", dest = "/usr/share/doc/quim-dkvm/README.md", mode = "644", doc = true },
+    { source = "../README.md", dest = "/usr/share/doc/riotkvm/README.md", mode = "644", doc = true },
 ]
 [package.metadata.generate-rpm.requires]
 dbus-libs = "*"
@@ -60,6 +64,9 @@ libxkbcommon = "*"
 libwayland-client = "*"
 libX11 = "*"
 bluez = "*"
+# el paquete se llamaba quim-dkvm: dnf lo sustituye al actualizar
+[package.metadata.generate-rpm.obsoletes]
+quim-dkvm = "*"
 
 [target.'cfg(windows)'.build-dependencies]
 embed-resource = "3"
