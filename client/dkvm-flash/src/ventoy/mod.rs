@@ -12,6 +12,7 @@
 //! (geometría 255/63, tope 1023/254/63): el script usa `parted` o `fdisk` y ambos dan CHS distintas que nadie lee.
 
 pub mod package;
+pub mod theme;
 
 pub use package::{Package, SHA256 as PACKAGE_SHA256, VERSION};
 
@@ -160,9 +161,9 @@ fn write_big(dev: &mut dyn BlockDev, off: u64, data: &[u8], label: &str, base: u
 }
 
 /// Escribe Ventoy entero en `dev` (disco o imagen). La única cancelación posible es antes de la primera escritura.
-/// Orden: borra el inicio, partición 2, exFAT, core.img y, lo último, el MBR (si algo falla a medias, el disco no
-/// parece un Ventoy válido).
-pub fn install(dev: &mut dyn BlockDev, pkg: &Package, rnd: &Randomness, rep: &dyn Reporter, cancel: &Cancel) -> Result<Plan> {
+/// Orden: borra el inicio, partición 2, exFAT (con `files` dentro: ventoy.json y el tema), core.img y, lo último,
+/// el MBR (si algo falla a medias, el disco no parece un Ventoy válido).
+pub fn install(dev: &mut dyn BlockDev, pkg: &Package, rnd: &Randomness, files: &[(String, Vec<u8>)], rep: &dyn Reporter, cancel: &Cancel) -> Result<Plan> {
     let p = plan(dev.size())?;
     cancel.check()?;
     let total = 32 * 1024 + pkg.disk_img.len() as u64 + pkg.core_img.len() as u64 + 512;
@@ -172,7 +173,8 @@ pub fn install(dev: &mut dyn BlockDev, pkg: &Package, rnd: &Randomness, rep: &dy
     rep.progress(Progress { stage: st.into(), done: 32 * 1024, total });
     write_big(dev, p.part2_start * SECTOR, &pkg.disk_img, st, 32 * 1024, total, rep)?;
     rep.progress(Progress { stage: "formateando exFAT".into(), done: 0, total: 0 });
-    exfat::format(dev, p.part1_start * SECTOR, p.part1_sectors(), p.cluster_sectors, LABEL, rnd.serial)?;
+    let nf: Vec<exfat::NewFile> = files.iter().map(|(path, data)| exfat::NewFile { path, data }).collect();
+    exfat::format_with_files(dev, p.part1_start * SECTOR, p.part1_sectors(), p.cluster_sectors, LABEL, rnd.serial, &nf, exfat::Timestamp::now())?;
     let mut core = pkg.core_img.clone();
     core.resize((CORE_MAX_SECTORS * SECTOR) as usize, 0);
     write_big(dev, SECTOR, &core, st, 32 * 1024 + pkg.disk_img.len() as u64, total, rep)?;
@@ -183,8 +185,8 @@ pub fn install(dev: &mut dyn BlockDev, pkg: &Package, rnd: &Randomness, rep: &dy
     Ok(p)
 }
 
-/// Relee lo escrito y lo compara (MBR, core.img, partición 2, región de arranque exFAT).
-pub fn verify(dev: &mut dyn BlockDev, pkg: &Package, rnd: &Randomness, rep: &dyn Reporter) -> Result<()> {
+/// Relee lo escrito y lo compara (MBR, core.img, partición 2, región de arranque exFAT y los `files` del exFAT).
+pub fn verify(dev: &mut dyn BlockDev, pkg: &Package, rnd: &Randomness, files: &[(String, Vec<u8>)], rep: &dyn Reporter) -> Result<()> {
     let p = plan(dev.size())?;
     let st = "verificando (leyendo lo escrito)";
     let total = (CORE_MAX_SECTORS + 1) * SECTOR + pkg.disk_img.len() as u64;
@@ -212,6 +214,14 @@ pub fn verify(dev: &mut dyn BlockDev, pkg: &Package, rnd: &Randomness, rep: &dyn
     let v = exfat::read_vbr(&vbr)?;
     if v.volume_sectors != p.part1_sectors() || v.cluster_sectors != p.cluster_sectors {
         return Err(Error::msg("verificación: el exFAT de la partición 1 no tiene la geometría esperada"));
+    }
+    if !files.is_empty() {
+        let got = exfat::read_files(dev, p.part1_start * SECTOR)?;
+        for (path, data) in files {
+            if !got.iter().any(|(gp, gd)| gp == path && gd == data) {
+                return Err(Error::msg(format!("verificación: /{path} no se leyó igual en el exFAT")));
+            }
+        }
     }
     Ok(())
 }
@@ -269,12 +279,20 @@ mod tests {
         let rnd = Randomness::new().unwrap();
         let mut d = MemDev::new(200 << 20);
         d.0.iter_mut().for_each(|b| *b = 0x5A); // basura previa
-        let p = install(&mut d, &pkg, &rnd, &crate::Silent, &Cancel::new()).unwrap();
-        verify(&mut d, &pkg, &rnd, &crate::Silent).unwrap();
+        let files = theme::sd_files(true);
+        let p = install(&mut d, &pkg, &rnd, &files, &crate::Silent, &Cancel::new()).unwrap();
+        verify(&mut d, &pkg, &rnd, &files, &crate::Silent).unwrap();
         assert_eq!(parse_mbr(&d.0[..512]).unwrap()[1].2, p.part2_start);
+        let got = exfat::read_files(&mut d, p.part1_start * SECTOR).unwrap();
+        assert!(files.iter().all(|f| got.contains(f)), "todo lo escrito (y Tools/) se lee igual");
+        assert!(got.iter().any(|(p, _)| p == "Tools/"));
+        // un byte cambiado en ventoy.json se detecta
+        let mut bad = files.clone();
+        bad[1].1[0] ^= 1;
+        assert!(verify(&mut d, &pkg, &rnd, &bad, &crate::Silent).is_err());
         // un byte cambiado en la partición 2 se detecta
         d.0[(p.part2_start * 512 + 4096) as usize] ^= 0xFF;
-        assert!(verify(&mut d, &pkg, &rnd, &crate::Silent).is_err());
+        assert!(verify(&mut d, &pkg, &rnd, &files, &crate::Silent).is_err());
     }
 
     #[test]
@@ -283,7 +301,7 @@ mod tests {
         let c = Cancel::new();
         c.cancel();
         let mut d = MemDev::new(200 << 20);
-        assert_eq!(install(&mut d, &pkg, &Randomness::new().unwrap(), &crate::Silent, &c).unwrap_err(), Error::Cancelled);
+        assert_eq!(install(&mut d, &pkg, &Randomness::new().unwrap(), &[], &crate::Silent, &c).unwrap_err(), Error::Cancelled);
         assert!(d.0.iter().all(|&b| b == 0));
     }
 }
