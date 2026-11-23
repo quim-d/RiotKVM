@@ -97,7 +97,7 @@ LEMA = "si no nos dejan soñar, no les dejaremos dormir"
 PIE = [
     "la emancipación de los trabajadores será obra de los trabajadores mismos — AIT, 1864",
     "Tierra y Libertad — Ricardo Flores Magón",
-    "llevamos un mundo nuevo en nuestros corazones — Durruti",
+    "made by quim-d",
 ]
 
 def background(W, H, L, pie):
