@@ -84,6 +84,8 @@ pub struct Tools {
     disks: Option<Result<Vec<Disk>, String>>,
     disk_sel: Option<String>,
     confirm_text: String,
+    /// Tema QKVM en la SD (por defecto sí; se pone a true al abrir la ventana la primera vez).
+    qkvm_theme: bool,
     // trabajo en curso y resultado
     job: Option<Job>,
     result: Option<Result<String, String>>,
@@ -189,6 +191,7 @@ impl Tools {
         if !self.env_checked {
             // (pruebas/capturas) DKVM_GUI_TOOLS=fw|sd abre la ventana al arrancar
             self.env_checked = true;
+            self.qkvm_theme = true;
             match std::env::var("DKVM_GUI_TOOLS").as_deref() {
                 Ok("fw") => self.open = true,
                 Ok("sd") => {
@@ -441,7 +444,7 @@ impl Tools {
     fn ui_sd(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
         let busy = self.job.is_some();
         ui.label(format!(
-            "Escribe Ventoy {} en modo MBR (arranca en BIOS legacy —HP Gen8/N40L— y en UEFI) y deja una partición exFAT «Ventoy» para las ISO. BORRA todo el disco.",
+            "Escribe Ventoy {} en modo MBR (arranca en BIOS legacy —HP Gen8/N40L— y en UEFI) con ventoy.json (menú en árbol) y la carpeta /Tools en la partición exFAT «Ventoy». BORRA todo el disco.",
             ventoy::VERSION
         ));
         ui.colored_label(theme::AMBAR, "A través del dongle la SD va a ~1 MB/s: prepárala y copia las ISO mejor con un lector de tarjetas.");
@@ -504,6 +507,10 @@ impl Tools {
             return;
         }
         ui.add_enabled_ui(!busy, |ui| {
+            ui.checkbox(&mut self.qkvm_theme, "Tema QKVM (calavera y verde fósforo; legacy y UEFI)");
+        });
+        ui.label(egui::RichText::new("Copia tus ISOs a la SD: instaladores en la raíz, herramientas en /Tools.").color(theme::CIAN));
+        ui.add_enabled_ui(!busy, |ui| {
             ui.horizontal(|ui| {
                 ui.label(format!("Para confirmar escribe «{}»:", d.id));
                 ui.add(egui::TextEdit::singleline(&mut self.confirm_text).desired_width(90.0));
@@ -517,6 +524,7 @@ impl Tools {
     }
 
     fn launch_ventoy(&mut self, ctx: &egui::Context, d: Disk) {
+        let files = ventoy::theme::sd_files(self.qkvm_theme);
         self.start(ctx, &format!("Ventoy en {}", d.id), move |rep, cancel| {
             let e = |e: dkvm_flash::Error| e.to_string();
             // paquete primero: si la descarga falla, el disco queda intacto
@@ -528,11 +536,11 @@ impl Tools {
             dkvm_flash::stage(rep, "pidiendo permiso para escribir el disco");
             let mut dev = dkvm_flash::rawdev::open_device(&d.raw_path, d.size).map_err(e)?;
             let rnd = ventoy::Randomness::new().map_err(e)?;
-            let p = ventoy::install(&mut dev, &pkg, &rnd, rep, cancel).map_err(e)?;
-            ventoy::verify(&mut dev, &pkg, &rnd, rep).map_err(e)?;
+            let p = ventoy::install(&mut dev, &pkg, &rnd, &files, rep, cancel).map_err(e)?;
+            ventoy::verify(&mut dev, &pkg, &rnd, &files, rep).map_err(e)?;
             drop(dev);
             Ok(format!(
-                "Ventoy {} escrito y verificado en {} (exFAT «Ventoy» de {}). Copia las ISO a la partición «Ventoy».",
+                "Ventoy {} escrito y verificado en {} (exFAT «Ventoy» de {}). Copia tus ISOs: instaladores en la raíz, herramientas en /Tools.",
                 ventoy::VERSION,
                 d.id,
                 dkvm_flash::human_size(p.part1_sectors() * 512)
