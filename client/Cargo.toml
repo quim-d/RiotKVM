@@ -3,7 +3,7 @@ resolver = "2"
 members = ["riotkvm-core", "riotkvm-cli", "riotkvm-video", "riotkvm-gui", "riotkvm-mcp", "riotkvm-flash"]
 
 [workspace.package]
-version = "0.2.4"
+version = "0.3.0"
 edition = "2021"
 license = "MIT"
 

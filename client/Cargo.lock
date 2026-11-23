@@ -4013,7 +4013,7 @@ dependencies = [
 
 [[package]]
 name = "riotkvm-cli"
-version = "0.2.4"
+version = "0.3.0"
 dependencies = [
  "clap",
  "clap_complete",
@@ -4025,7 +4025,7 @@ dependencies = [
 
 [[package]]
 name = "riotkvm-core"
-version = "0.2.4"
+version = "0.3.0"
 dependencies = [
  "btleplug",
  "futures",
@@ -4040,7 +4040,7 @@ dependencies = [
 
 [[package]]
 name = "riotkvm-flash"
-version = "0.2.4"
+version = "0.3.0"
 dependencies = [
  "dbus",
  "espflash",
@@ -4062,7 +4062,7 @@ dependencies = [
 
 [[package]]
 name = "riotkvm-gui"
-version = "0.2.4"
+version = "0.3.0"
 dependencies = [
  "bytemuck",
  "clap",
@@ -4078,7 +4078,7 @@ dependencies = [
 
 [[package]]
 name = "riotkvm-mcp"
-version = "0.2.4"
+version = "0.3.0"
 dependencies = [
  "base64 0.22.1",
  "image",
@@ -4090,7 +4090,7 @@ dependencies = [
 
 [[package]]
 name = "riotkvm-video"
-version = "0.2.4"
+version = "0.3.0"
 dependencies = [
  "flume",
  "image",
