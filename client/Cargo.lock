@@ -1317,98 +1317,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "dkvm-cli"
-version = "0.2.4"
-dependencies = [
- "clap",
- "clap_complete",
- "dkvm-core",
- "dkvm-flash",
- "serde_json",
- "tempfile",
-]
-
-[[package]]
-name = "dkvm-core"
-version = "0.2.4"
-dependencies = [
- "btleplug",
- "futures",
- "serde",
- "serde_json",
- "serialport",
- "tokio",
- "unicode-normalization",
- "uuid",
- "windows",
-]
-
-[[package]]
-name = "dkvm-flash"
-version = "0.2.4"
-dependencies = [
- "dbus",
- "dkvm-core",
- "espflash",
- "flate2",
- "getrandom 0.3.4",
- "hex",
- "libc",
- "lzma-rs",
- "plist",
- "serde",
- "serde_json",
- "serialport",
- "sha2 0.10.9",
- "tar",
- "tempfile",
- "ureq",
-]
-
-[[package]]
-name = "dkvm-gui"
-version = "0.2.4"
-dependencies = [
- "bytemuck",
- "clap",
- "dkvm-core",
- "dkvm-flash",
- "dkvm-video",
- "eframe",
- "embed-resource",
- "image",
- "windows-sys 0.61.2",
-]
-
-[[package]]
-name = "dkvm-mcp"
-version = "0.2.4"
-dependencies = [
- "base64 0.22.1",
- "dkvm-core",
- "dkvm-video",
- "image",
- "rquickjs",
- "serde_json",
-]
-
-[[package]]
-name = "dkvm-video"
-version = "0.2.4"
-dependencies = [
- "dkvm-core",
- "flume",
- "image",
- "mozjpeg",
- "nokhwa",
- "nokhwa-bindings-macos",
- "objc",
- "serde_json",
- "v4l",
- "windows-sys 0.61.2",
-]
-
-[[package]]
 name = "dlib"
 version = "0.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4101,6 +4009,98 @@ dependencies = [
  "libc",
  "untrusted",
  "windows-sys 0.52.0",
+]
+
+[[package]]
+name = "riotkvm-cli"
+version = "0.2.4"
+dependencies = [
+ "clap",
+ "clap_complete",
+ "riotkvm-core",
+ "riotkvm-flash",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
+name = "riotkvm-core"
+version = "0.2.4"
+dependencies = [
+ "btleplug",
+ "futures",
+ "serde",
+ "serde_json",
+ "serialport",
+ "tokio",
+ "unicode-normalization",
+ "uuid",
+ "windows",
+]
+
+[[package]]
+name = "riotkvm-flash"
+version = "0.2.4"
+dependencies = [
+ "dbus",
+ "espflash",
+ "flate2",
+ "getrandom 0.3.4",
+ "hex",
+ "libc",
+ "lzma-rs",
+ "plist",
+ "riotkvm-core",
+ "serde",
+ "serde_json",
+ "serialport",
+ "sha2 0.10.9",
+ "tar",
+ "tempfile",
+ "ureq",
+]
+
+[[package]]
+name = "riotkvm-gui"
+version = "0.2.4"
+dependencies = [
+ "bytemuck",
+ "clap",
+ "eframe",
+ "embed-resource",
+ "image",
+ "riotkvm-core",
+ "riotkvm-flash",
+ "riotkvm-video",
+ "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "riotkvm-mcp"
+version = "0.2.4"
+dependencies = [
+ "base64 0.22.1",
+ "image",
+ "riotkvm-core",
+ "riotkvm-video",
+ "rquickjs",
+ "serde_json",
+]
+
+[[package]]
+name = "riotkvm-video"
+version = "0.2.4"
+dependencies = [
+ "flume",
+ "image",
+ "mozjpeg",
+ "nokhwa",
+ "nokhwa-bindings-macos",
+ "objc",
+ "riotkvm-core",
+ "serde_json",
+ "v4l",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
