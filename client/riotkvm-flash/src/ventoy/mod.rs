@@ -279,7 +279,7 @@ mod tests {
         let rnd = Randomness::new().unwrap();
         let mut d = MemDev::new(200 << 20);
         d.0.iter_mut().for_each(|b| *b = 0x5A); // basura previa
-        let files = theme::sd_files(true);
+        let files = theme::sd_files();
         let p = install(&mut d, &pkg, &rnd, &files, &crate::Silent, &Cancel::new()).unwrap();
         verify(&mut d, &pkg, &rnd, &files, &crate::Silent).unwrap();
         assert_eq!(parse_mbr(&d.0[..512]).unwrap()[1].2, p.part2_start);

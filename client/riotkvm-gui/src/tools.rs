@@ -84,8 +84,6 @@ pub struct Tools {
     disks: Option<Result<Vec<Disk>, String>>,
     disk_sel: Option<String>,
     confirm_text: String,
-    /// Tema RiotKVM en la SD (por defecto sí; se pone a true al abrir la ventana la primera vez).
-    riotkvm_theme: bool,
     // trabajo en curso y resultado
     job: Option<Job>,
     result: Option<Result<String, String>>,
@@ -191,7 +189,6 @@ impl Tools {
         if !self.env_checked {
             // (pruebas/capturas) RIOTKVM_GUI_TOOLS=fw|sd abre la ventana al arrancar
             self.env_checked = true;
-            self.riotkvm_theme = true;
             match riotkvm_core::config::env("GUI_TOOLS").as_deref() {
                 Some("fw") => self.open = true,
                 Some("sd") => {
@@ -512,9 +509,6 @@ impl Tools {
             ui.colored_label(theme::ROJO, e.to_string());
             return;
         }
-        ui.add_enabled_ui(!busy, |ui| {
-            ui.checkbox(&mut self.riotkvm_theme, "Tema RiotKVM (calavera y verde fósforo; legacy y UEFI)");
-        });
         ui.label(egui::RichText::new("Copia tus ISOs a la SD: instaladores en la raíz, herramientas en /Tools.").color(theme::CIAN));
         ui.add_enabled_ui(!busy, |ui| {
             ui.horizontal(|ui| {
@@ -530,7 +524,7 @@ impl Tools {
     }
 
     fn launch_ventoy(&mut self, ctx: &egui::Context, d: Disk) {
-        let files = ventoy::theme::sd_files(self.riotkvm_theme);
+        let files = ventoy::theme::sd_files();
         self.start(ctx, &format!("Ventoy en {}", d.id), move |rep, cancel| {
             let e = |e: riotkvm_flash::Error| e.to_string();
             // paquete primero: si la descarga falla, el disco queda intacto

@@ -64,8 +64,8 @@ pub fn theme_section() -> Value {
 }
 
 /// ventoy.json: castellano, menú en árbol, fuera los `._*` que deja macOS en exFAT, icono de rescate para todo lo
-/// que haya en `/Tools` y alias de esa carpeta. Con `with_theme`, el tema RiotKVM.
-pub fn ventoy_json(with_theme: bool) -> Value {
+/// que haya en `/Tools`, alias de esa carpeta y el tema RiotKVM.
+pub fn ventoy_json() -> Value {
     let mut v = json!({
         "control": [
             {"VTOY_MENU_LANGUAGE": "es_ES"},
@@ -73,9 +73,7 @@ pub fn ventoy_json(with_theme: bool) -> Value {
             {"VTOY_FILT_DOT_UNDERSCORE_FILE": "1"}
         ]
     });
-    if with_theme {
-        v["theme"] = theme_section();
-    }
+    v["theme"] = theme_section();
     v["menu_class"] = json!([{"parent": format!("/{TOOLS_DIR}"), "class": "riotkvm-rescate"}]);
     v["menu_alias"] = json!([{"dir": format!("/{TOOLS_DIR}"), "alias": "Tools — rescate y diagnóstico"}]);
     v
@@ -88,12 +86,10 @@ fn pretty(v: &Value) -> Vec<u8> {
 }
 
 /// Lo que se crea en el exFAT al preparar la SD: la carpeta `Tools/` (ruta acabada en `/` = directorio vacío),
-/// ventoy.json y, con `with_theme`, el tema.
-pub fn sd_files(with_theme: bool) -> Vec<(String, Vec<u8>)> {
-    let mut v = vec![(format!("{TOOLS_DIR}/"), Vec::new()), ("ventoy/ventoy.json".to_string(), pretty(&ventoy_json(with_theme)))];
-    if with_theme {
-        v.extend(theme_files().into_iter().map(|(p, d)| (p, d.to_vec())));
-    }
+/// ventoy.json y el tema RiotKVM (siempre: el software solo prepara Ventoy con el tema).
+pub fn sd_files() -> Vec<(String, Vec<u8>)> {
+    let mut v = vec![(format!("{TOOLS_DIR}/"), Vec::new()), ("ventoy/ventoy.json".to_string(), pretty(&ventoy_json()))];
+    v.extend(theme_files().into_iter().map(|(p, d)| (p, d.to_vec())));
     v
 }
 
@@ -130,7 +126,7 @@ mod tests {
 
     #[test]
     fn json_tree_mode_tools_and_theme() {
-        let v = ventoy_json(true);
+        let v = ventoy_json();
         assert_eq!(v["theme"]["resolution_fit"], 1);
         assert_eq!(v["theme"]["file"][0], "/ventoy/theme/riotkvm/theme_1920x1080_1.txt");
         assert!(v["theme"]["gfxmode"].as_str().unwrap().starts_with("1920x1080"));
@@ -138,10 +134,9 @@ mod tests {
         assert!(v["control"].as_array().unwrap().iter().any(|c| c["VTOY_DEFAULT_MENU_MODE"] == "1"));
         assert!(!v["control"].as_array().unwrap().iter().any(|c| c.get("VTOY_DEFAULT_SEARCH_ROOT").is_some()));
         assert_eq!(v["menu_alias"], json!([{"dir": "/Tools", "alias": "Tools — rescate y diagnóstico"}]));
-        assert!(ventoy_json(false).get("theme").is_none());
-        let files = sd_files(true);
+        let files = sd_files();
         assert_eq!(files[0], ("Tools/".to_string(), vec![]));
         assert!(serde_json::from_slice::<Value>(&files[1].1).is_ok());
-        assert_eq!(sd_files(false).len(), 2);
+        assert!(files.len() > 2, "con el tema");
     }
 }

@@ -322,8 +322,8 @@ En macOS el vídeo ya no pasa por `Camera` de nokhwa (`riotkvm-video/src/mac.rs`
 
 - `riotkvm sd ventoy --disk diskN` (y la GUI, Tools → microSD) escribe Ventoy y, dentro del exFAT, `/ventoy/ventoy.json`,
   el tema RiotKVM y la carpeta vacía `/Tools` (lo crea `riotkvm-flash/src/exfat.rs`: clústeres contiguos con su cadena
-  FAT, bitmap y checksums; comprobado con `fsck.exfat` y montándolo en macOS). `--no-theme` (casilla en la GUI)
-  deja el tema de Ventoy. No se descarga ni se copia ninguna ISO: cada uno pone las suyas, instaladores en la
+  FAT, bitmap y checksums; comprobado con `fsck.exfat` y montándolo en macOS). Siempre con el tema RiotKVM.
+  No se descarga ni se copia ninguna ISO: cada uno pone las suyas, instaladores en la
   raíz y herramientas en `/Tools`.
 - `ventoy.json`: menú en castellano y en árbol (`VTOY_DEFAULT_MENU_MODE` 1), alias de la carpeta (`Tools — rescate
   y diagnóstico`), icono de rescate para lo que haya en `/Tools`, `VTOY_FILT_DOT_UNDERSCORE_FILE` (los `._*` que

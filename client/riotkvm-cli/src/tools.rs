@@ -49,9 +49,6 @@ pub enum SdCmd {
         /// No pedir que se teclee el identificador del disco para confirmar.
         #[arg(long)]
         yes: bool,
-        /// Sin el tema RiotKVM (queda el de Ventoy; ventoy.json y /Tools se crean igual).
-        #[arg(long)]
-        no_theme: bool,
     },
 }
 
@@ -203,8 +200,8 @@ pub fn sd(app: &mut App, cmd: &SdCmd) -> Result<i32> {
             }
             Ok(0)
         }
-        SdCmd::Ventoy { disk, image, yes, no_theme } => {
-            let files = ventoy::theme::sd_files(!no_theme);
+        SdCmd::Ventoy { disk, image, yes } => {
+            let files = ventoy::theme::sd_files();
             let rep = CliRep::new(app);
             let cancel = Cancel::new();
             let mut dev: rawdev::FileDev;
