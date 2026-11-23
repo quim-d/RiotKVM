@@ -26,7 +26,7 @@ Estado: **etapa 1** (solo CDC de texto). El protocolo BLE binario versionado se 
 | `ble want MIN [MAX]` | Intervalo de conexion pedido (unidades de 1,25 ms; 6 = 7,5 ms) | `ok` / `err range` |
 | `ble slowadv 0\|1` | Anuncio lento (400-500 ms) mientras hay cliente (por defecto 1) | `ok` |
 | `mode [a\|b\|c]` | Sin argumento: `mode=X`. Con argumento: `ok` y el dongle guarda el modo en NVS, suelta todo y se reinicia (otro PID, otro COM) | `ok` |
-| `led` / `led auto` / `led off` / `led RRGGBB [brillo]` | Luz (LED RGB APA102). Sin argumento: `led=auto\|off\|RRGGBB@NN`. `auto` = color segun el estado (modo, BLE, fallo de SD: el de siempre); `RRGGBB` (hex, admite `#`) = color fijo con brillo 0..100 % (sin brillo se conserva el anterior; defecto 35, el brillo de `auto`); `off` = apagado. Se aplica al momento y se guarda en NVS tras 1 s sin cambios. Desde firmware 1.2.0 (antes: `err unknown`) | `ok` / `err args` / `err range` |
+| `led` / `led auto` / `led off` / `led RRGGBB [brillo]` | Luz (LED RGB APA102). Sin argumento: `led=auto\|off\|RRGGBB@NN`. `auto` = color segun el estado (modo, BLE, fallo de SD: el de siempre); `RRGGBB` (hex, admite `#`) = color fijo con brillo 0..100 % (sin brillo se conserva el anterior; defecto 35, el brillo de `auto`); `off` = apagado. Se aplica al momento y es **persistente** (NVS, tras 1 s sin cambios; sobrevive a reinicios; de fabrica `auto`). Desde firmware 1.2.0 (antes: `err unknown`) | `ok` / `err args` / `err range` |
 | `reboot` | Suelta todo y reinicia | `ok` |
 | `heap`, `log`, `coredump` | Depuracion: memoria libre, trazas ESP_LOG en RTC, resumen del ultimo panic (pc + backtrace, decodificar con addr2line) | lineas |
 | `ble kick` / `ble start` | Depuracion: desconecta al cliente BLE / arranca BLE si estaba en safe | `ok` |
@@ -89,7 +89,7 @@ Una escritura (o notificacion) es una **secuencia de registros** concatenados, s
 | 0x10 | PING | 2 | `seq:u16` | Responde EVT PONG con el mismo `seq` |
 | 0x11 | GET_STATE | 0 | - | Responde EVT STATE |
 | 0x12 | SET_MODE | 1 | `mode:u8` (0=A, 1=B, 2=C) | Cambia el modo USB (ver abajo): guarda en NVS, suelta todo y **reinicia el dongle** (USB se re-enumera con otro PID y la conexion BLE se corta; el cliente debe reconectar) |
-| 0x13 | SET_LED | 5 | `mode:u8, r:u8, g:u8, b:u8, bright:u8` | Luz: `mode` 0 = auto (color segun estado), 1 = color fijo `r,g,b` al `bright` % (0..100), 2 = apagado (en auto/apagado `r,g,b,bright` se guardan igual: son el color fijo para la proxima vez). `mode > 2` o `bright > 100` -> ERR RANGE. Sin respuesta (como SET_MODE); el estado se lee en INFO [8..12]. Firmware 1.2.0+ (INFO caps bit6); uno anterior responde ERR UNKNOWN_OP y el cliente lo muestra como "el firmware no admite control de la luz: actualizalo" |
+| 0x13 | SET_LED | 5 | `mode:u8, r:u8, g:u8, b:u8, bright:u8` | Luz: `mode` 0 = auto (color segun estado), 1 = color fijo `r,g,b` al `bright` % (0..100), 2 = apagado (en auto/apagado `r,g,b,bright` se guardan igual: son el color fijo para la proxima vez). `mode > 2` o `bright > 100` -> ERR RANGE. **Persistente**: se guarda en NVS (sobrevive a reinicios; si nunca se ha tocado, auto). Sin respuesta (como SET_MODE); el estado se lee en INFO [8..12]. Firmware 1.2.0+ (INFO caps bit6); uno anterior responde ERR UNKNOWN_OP y el cliente lo muestra como "el firmware no admite control de la luz: actualizalo" |
 
 El estado de teclas/botones es **persistente en el dongle** (KEY_DOWN deja la tecla pulsada hasta KEY_UP/RELEASE_ALL/desconexion). Maximo 6 teclas no modificadoras a la vez.
 
