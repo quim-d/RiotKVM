@@ -4,7 +4,8 @@
 //! El hilo de UI solo traduce eventos a `Cmd` y hace `send`; nunca espera al dongle.
 
 use crate::dlog::{BUTTONS, ERRORS, KEYS, MOVES};
-use crate::{dlog, hook, theme};
+use crate::i18n::{t, t_or};
+use crate::{dlog, hook, theme, tf};
 use riotkvm_core::input::abs_from_pixels;
 use std::sync::atomic::Ordering::Relaxed;
 use riotkvm_core::session::{Cmd, Event, PasteJob, Session};
@@ -52,8 +53,8 @@ impl VideoCtl {
     }
 }
 
-/// Modos ofrecidos en el desplegable (MJPEG: el único formato que da 30-60 fps en esta capturadora).
-pub const VIDEO_MODES: &[(&str, u32, u32, u32)] = &[("1080p30 · nitidez", 1920, 1080, 30), ("720p60 · fluidez", 1280, 720, 60), ("720p30 · ligero", 1280, 720, 30)];
+/// Modos ofrecidos en el desplegable (MJPEG: el único formato que da 30-60 fps en esta capturadora). Etiqueta = clave de `i18n`.
+pub const VIDEO_MODES: &[(&str, u32, u32, u32)] = &[("vid.m1080", 1920, 1080, 30), ("vid.m720_60", 1280, 720, 60), ("vid.m720_30", 1280, 720, 30)];
 
 fn mode_path() -> Option<std::path::PathBuf> {
     Some(riotkvm_core::config::state_dir()?.join("video_mode.txt"))
@@ -199,7 +200,8 @@ pub struct App {
     tools: crate::tools::Tools,
 }
 
-/// Combinaciones que el SO local intercepta o son incómodas de teclear.
+/// Combinaciones que el SO local intercepta o son incómodas de teclear. Las etiquetas pasan por `i18n::t_or`
+/// (Supr/Del, RePág/PgUp...); las que no están en la tabla se muestran tal cual.
 const KEYS_SYSTEM: &[(&str, &str)] = &[
     ("Ctrl+Alt+Supr / Del", "ctrl+alt+del"),
     ("Ctrl+Shift+Esc", "ctrl+shift+esc"),
@@ -397,7 +399,7 @@ impl App {
                 let cur = (self.video.mode.w, self.video.mode.h, self.video.mode.fps);
                 let chosen = riotkvm_video::pick_mode(cur, &modes).unwrap_or(cur);
                 if chosen != cur {
-                    self.note(format!("el modo {}x{}@{} no existe en esta fuente: se usa {}x{}@{}", cur.0, cur.1, cur.2, chosen.0, chosen.1, chosen.2), false);
+                    self.note(tf!("vid.mode_missing", format!("{}x{}@{}", cur.0, cur.1, cur.2), format!("{}x{}@{}", chosen.0, chosen.1, chosen.2)), false);
                     save_video_mode(chosen.0, chosen.1, chosen.2);
                 }
                 self.modes = modes;
@@ -428,12 +430,12 @@ impl App {
 
     fn start_paste(&mut self, text: String) {
         if self.job.is_some() {
-            self.note("ya hay un trabajo en curso (Esc lo cancela)", true);
+            self.note(t("n.busy"), true);
             return;
         }
         let n = text.chars().count();
         if n == 0 {
-            self.note("no hay texto que teclear", true);
+            self.note(t("n.empty"), true);
             return;
         }
         let layout = self.paste_layout();
@@ -449,7 +451,7 @@ impl App {
         let n = text.chars().count();
         // el contenido nunca se registra: solo longitud y parámetros
         dlog!("pegar: {n} caracteres, layout {layout}, {} ms/tecla, {} no representables", self.paste.per_key_ms, bad.len());
-        self.job = Some(("pegar".into(), 0, n));
+        self.job = Some((t("job.paste").into(), 0, n));
         hook::set_blocked(true);
         if !bad.is_empty() {
             let mut seen: Vec<char> = Vec::new();
@@ -459,9 +461,9 @@ impl App {
                 }
             }
             let list: String = seen.iter().map(|c| if c.is_control() { format!("U+{:04X}", *c as u32) } else { c.to_string() }).collect::<Vec<_>>().join(" ");
-            self.note(format!("AVISO: {} caracteres no representables en el layout {layout} se saltarán: {list}", bad.len()), true);
+            self.note(tf!("n.bad_chars", bad.len(), layout, list), true);
         } else {
-            self.note(format!("tecleando {n} caracteres (Esc cancela)..."), false);
+            self.note(tf!("n.typing", n), false);
         }
         self.send(Cmd::Paste(PasteJob { text, layout, per_key_ms: self.paste.per_key_ms }));
     }
@@ -474,13 +476,13 @@ impl App {
         if let Ok(lay) = riotkvm_core::layouts::get_layout(&self.layout) {
             for tok in combo.split_whitespace() {
                 if let Err(e) = riotkvm_core::keys::parse_combo(tok, lay) {
-                    self.note(format!("combinación no válida: {}", e.message()), true);
+                    self.note(tf!("n.bad_combo", e.message()), true);
                     return;
                 }
             }
         }
         dlog!("enviar teclas: {combo}");
-        self.note(format!("enviando: {combo}"), false);
+        self.note(tf!("n.sending", combo), false);
         self.send(Cmd::Keys(combo.to_string()));
     }
 
@@ -509,8 +511,8 @@ impl App {
                     return;
                 }
                 dlog!("repetir {combo} cada {} ms durante {} s", self.rep_interval, self.rep_secs);
-                self.job = Some((format!("repetir {combo}"), 0, 0));
-                self.note(format!("repitiendo {combo} cada {} ms durante {:.0} s (Esc / Parar lo detiene)", self.rep_interval, self.rep_secs), false);
+                self.job = Some((tf!("job.repeat", combo), 0, 0));
+                self.note(tf!("n.repeating", combo, self.rep_interval, format!("{:.0}", self.rep_secs)), false);
                 hook::set_blocked(true);
                 self.send(Cmd::Repeat { combo, interval_ms: self.rep_interval, secs: self.rep_secs });
             }
@@ -535,7 +537,7 @@ impl App {
         self.layout = n.to_string();
         riotkvm_core::config::save_layout(n);
         self.send(Cmd::SetLayout(n.to_string()));
-        self.note(format!("distribución del teclado del servidor: {}", riotkvm_core::layouts::layout_label(n)), false);
+        self.note(tf!("n.layout", riotkvm_core::layouts::layout_label(n)), false);
     }
 
     fn send(&self, c: Cmd) {
@@ -874,14 +876,14 @@ impl eframe::App for App {
                 }
                 ui.label(egui::RichText::new(mode_name).strong().size(16.0).color(mode_col));
                 ui.separator();
-                let label = if self.captured { "[ Liberar ]" } else { "[ Capturar ]" };
+                let label = if self.captured { t("top.release") } else { t("top.capture") };
                 if ui.button(label).clicked() {
                     let on = !self.captured;
                     self.set_capture(&ctx, on);
                 }
                 ui.separator();
                 let mut new_mouse = self.mode;
-                ui.label(egui::RichText::new("ratón").color(theme::GRIS));
+                ui.label(egui::RichText::new(t("top.mouse")).color(theme::GRIS));
                 ui.selectable_value(&mut new_mouse, MouseMode::Absolute, "abs");
                 ui.selectable_value(&mut new_mouse, MouseMode::Relative, "rel");
                 if new_mouse != self.mode {
@@ -899,22 +901,22 @@ impl eframe::App for App {
                 }
                 ui.separator();
                 // ---- Vídeo
-                ui.menu_button("Vídeo", |ui| {
-                    ui.label(egui::RichText::new("fuente").color(theme::GRIS));
+                ui.menu_button(t("vid.menu"), |ui| {
+                    ui.label(egui::RichText::new(t("vid.source")).color(theme::GRIS));
                     let mut pick_src: Option<String> = None;
-                    if ui.selectable_label(self.src_pref == "auto" || self.src_pref.is_empty(), "Automática (capturadora si hay)").clicked() {
+                    if ui.selectable_label(self.src_pref == "auto" || self.src_pref.is_empty(), t("vid.auto")).clicked() {
                         pick_src = Some("auto".into());
                     }
                     for d in &self.devices {
-                        let l = format!("{}{}{}{}", d.name, if d.node.is_empty() { String::new() } else { format!(" [{}]", d.node) }, if d.capture_card { " (capturadora)" } else { "" }, if d.virtual_cam { " (virtual)" } else { "" });
+                        let l = format!("{}{}{}{}", d.name, if d.node.is_empty() { String::new() } else { format!(" [{}]", d.node) }, if d.capture_card { t("vid.card") } else { "" }, if d.virtual_cam { " (virtual)" } else { "" });
                         if ui.selectable_label(self.src_pref.eq_ignore_ascii_case(&d.name), l).clicked() {
                             pick_src = Some(d.name.clone());
                         }
                     }
-                    if ui.selectable_label(self.src_pref == "none", "Ninguna (sin vídeo)").clicked() {
+                    if ui.selectable_label(self.src_pref == "none", t("vid.none")).clicked() {
                         pick_src = Some("none".into());
                     }
-                    if ui.small_button("Actualizar lista").on_hover_text("Buscar cámaras y capturadoras (no enciende ninguna); si se detuvieron los reintentos, vuelve a abrir la fuente").clicked() {
+                    if ui.small_button(t("vid.refresh")).on_hover_text(t("vid.refresh_tip")).clicked() {
                         self.refresh_devices();
                         if self.video.latest.error().map(|e| e.contains("se detienen los reintentos")).unwrap_or(false) {
                             let p = if self.src_pref.is_empty() { "auto".to_string() } else { self.src_pref.clone() };
@@ -922,11 +924,11 @@ impl eframe::App for App {
                         }
                     }
                     ui.separator();
-                    ui.label(egui::RichText::new("resolución / fps").color(theme::GRIS));
+                    ui.label(egui::RichText::new(t("vid.res")).color(theme::GRIS));
                     let avail: Vec<(String, u32, u32, u32)> = if self.modes.is_empty() {
-                        VIDEO_MODES.iter().map(|m| (m.0.to_string(), m.1, m.2, m.3)).collect()
+                        VIDEO_MODES.iter().map(|m| (t_or(m.0).to_string(), m.1, m.2, m.3)).collect()
                     } else {
-                        self.modes.iter().map(|(w, h, f)| (format!("{w}x{h} · {f} fps{}", if (*w, *h, *f) == (1280, 720, 60) { " (baja latencia)" } else { "" }), *w, *h, *f)).collect()
+                        self.modes.iter().map(|(w, h, f)| (format!("{w}x{h} · {f} fps{}", if (*w, *h, *f) == (1280, 720, 60) { t("vid.low_lat") } else { "" }), *w, *h, *f)).collect()
                     };
                     let mut pick: Option<(u32, u32, u32)> = None;
                     for (label, w, h, fps) in &avail {
@@ -949,11 +951,11 @@ impl eframe::App for App {
                     }
                 });
                 // ---- Teclado (distribución del servidor)
-                ui.menu_button("Enviar teclas", |ui| {
-                    for (title, list) in [("Sistema", KEYS_SYSTEM), ("Linux TTY", KEYS_TTY), ("Funciones / BIOS", KEYS_BIOS)] {
+                ui.menu_button(t("keys.menu"), |ui| {
+                    for (title, list) in [(t("keys.system"), KEYS_SYSTEM), ("Linux TTY", KEYS_TTY), (t("keys.fn"), KEYS_BIOS)] {
                         ui.menu_button(title, |ui| {
                             for (label, combo) in list {
-                                if ui.button(*label).clicked() {
+                                if ui.button(t_or(*label)).clicked() {
                                     action = Some(Action::Keys((*combo).into()));
                                     ui.close();
                                 }
@@ -961,47 +963,47 @@ impl eframe::App for App {
                         });
                     }
                     ui.separator();
-                    ui.label("Combinación personalizada (como riotkvm key):");
-                    let r = ui.add(egui::TextEdit::singleline(&mut self.custom_keys).hint_text("ctrl+alt+del   o   alt+f4 enter").desired_width(220.0));
-                    if (ui.button("Enviar").clicked() || (r.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter)))) && !self.custom_keys.trim().is_empty() {
+                    ui.label(t("keys.custom"));
+                    let r = ui.add(egui::TextEdit::singleline(&mut self.custom_keys).hint_text(t("keys.custom_hint")).desired_width(220.0));
+                    if (ui.button(t("keys.send")).clicked() || (r.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter)))) && !self.custom_keys.trim().is_empty() {
                         action = Some(Action::Keys(self.custom_keys.clone()));
                         ui.close();
                     }
                     ui.separator();
-                    ui.label("Mantener pulsada / repetir (entrar en la BIOS):");
+                    ui.label(t("keys.repeat"));
                     ui.horizontal(|ui| {
                         ui.add(egui::TextEdit::singleline(&mut self.rep_combo).desired_width(70.0));
                         ui.add(egui::DragValue::new(&mut self.rep_interval).range(20..=2000).suffix(" ms"));
                         ui.add(egui::DragValue::new(&mut self.rep_secs).range(1.0..=120.0).suffix(" s"));
                     });
                     if self.job.is_some() {
-                        if ui.button("Parar").clicked() {
+                        if ui.button(t("keys.stop")).clicked() {
                             action = Some(Action::StopJob);
                         }
-                    } else if ui.button("Iniciar repetición").clicked() {
+                    } else if ui.button(t("keys.start_repeat")).clicked() {
                         action = Some(Action::Repeat);
                         ui.close();
                     }
                 });
-                ui.menu_button("Pegar", |ui| {
-                    if ui.button(format!("Pegar portapapeles ({})", self.opts.paste_chord.label())).clicked() {
+                ui.menu_button(t("paste.menu"), |ui| {
+                    if ui.button(tf!("paste.clip", self.opts.paste_chord.label())).clicked() {
                         action = Some(Action::PasteClip);
                         ui.close();
                     }
-                    if ui.button("Escribir texto...").clicked() {
+                    if ui.button(t("paste.type")).clicked() {
                         action = Some(Action::OpenPasteWin);
                         ui.close();
                     }
                     ui.separator();
-                    ui.radio_value(&mut self.paste.physical, false, "texto (por layout del servidor)");
-                    ui.radio_value(&mut self.paste.physical, true, "teclas físicas (posición US, para BIOS)");
-                    ui.add(egui::Slider::new(&mut self.paste.per_key_ms, 0..=50).text("ms por tecla"));
-                    ui.checkbox(&mut self.paste.confirm_always, format!("confirmar siempre (si no, solo > {CONFIRM_OVER} caracteres)"));
+                    ui.radio_value(&mut self.paste.physical, false, t("paste.by_layout"));
+                    ui.radio_value(&mut self.paste.physical, true, t("paste.physical"));
+                    ui.add(egui::Slider::new(&mut self.paste.per_key_ms, 0..=50).text(t("paste.ms")));
+                    ui.checkbox(&mut self.paste.confirm_always, tf!("paste.confirm", CONFIRM_OVER));
                 });
-                if ui.add(egui::Button::new("Ajustes").selected(self.settings.open)).clicked() {
+                if ui.add(egui::Button::new(t("top.settings")).selected(self.settings.open)).clicked() {
                     self.settings.open = !self.settings.open;
                 }
-                if ui.button("Tools").on_hover_text("Flashear el firmware del dongle · preparar una microSD con Ventoy").clicked() {
+                if ui.button(t("top.tools")).on_hover_text(t("top.tools_tip")).clicked() {
                     self.tools.open = true;
                 }
                 let info = self.video.latest.info();
@@ -1013,9 +1015,9 @@ impl eframe::App for App {
         // línea propia y siempre visible mientras haya captura: cómo salir
         if self.captured {
             egui::Panel::bottom("escape").show(ui, |ui| {
-                let teclado = if self.hook_ok { "teclado total" } else { "teclado limitado" };
-                let raton = if self.mode == MouseMode::Absolute { "absoluto" } else { "relativo" };
-                ui.label(egui::RichText::new(format!("CAPTURADO ({teclado}, ratón {raton}) · para SOLTAR pulsa {} (o cambia de ventana)", hook::ESCAPE_HELP)).strong().color(theme::AMBAR));
+                let teclado = if self.hook_ok { t("bar.kbd_full") } else { t("bar.kbd_limited") };
+                let raton = if self.mode == MouseMode::Absolute { t("s.abs") } else { t("s.rel") };
+                ui.label(egui::RichText::new(tf!("bar.captured", teclado, raton, hook::ESCAPE_HELP)).strong().color(theme::AMBAR));
             });
         }
         egui::Panel::bottom("status").show(ui, |ui| {
@@ -1040,7 +1042,7 @@ impl eframe::App for App {
                         tg(ui, if *hid { theme::Tag::Ok } else if mode.as_deref() == Some("A") { theme::Tag::Na } else { theme::Tag::Wait }, "hid", "", theme::CIAN);
                         tg(ui, if *sd { theme::Tag::Ok } else if mode.as_deref() == Some("B") { theme::Tag::Na } else { theme::Tag::Fail }, "sd", if *sd { "" } else { "no card" }, theme::ROJO);
                         if *boot {
-                            ui.label(egui::RichText::new("BIOS (ratón no disponible)").color(theme::AMBAR));
+                            ui.label(egui::RichText::new(t("bar.bios")).color(theme::AMBAR));
                         }
                         let led = |on: bool, n: &str| egui::RichText::new(n).color(if on { theme::AMBAR } else { theme::GRIS });
                         ui.label(led(leds & 1 != 0, "Num"));
@@ -1056,9 +1058,9 @@ impl eframe::App for App {
                 let rtt = self.rtt_us.map(|r| format!(" · {:.0} ms", r as f64 / 1000.0)).unwrap_or_default();
                 let errs = ERRORS.load(Relaxed);
                 let ws = riotkvm_core::latency::snapshot();
-                let mut det = format!(
-                    "vídeo {}x{} · edad {:.1}→{:.1} ms · dec {:.1} ms · descartados {}\nenviado: teclas {} · clics {} · mov {} · err {} · hook {} (vio {})",
-                    self.vsize.0, self.vsize.1, self.age_ms, self.age_end_ms, self.dec_ms,
+                let mut det = tf!(
+                    "bar.stats",
+                    self.vsize.0, self.vsize.1, format!("{:.1}", self.age_ms), format!("{:.1}", self.age_end_ms), format!("{:.1}", self.dec_ms),
                     self.video.latest.dropped.load(std::sync::atomic::Ordering::Relaxed),
                     KEYS.load(Relaxed), BUTTONS.load(Relaxed), MOVES.load(Relaxed), errs, if self.hook_ok { "ok" } else { "NO" }, dlog::HOOK_SEEN.load(Relaxed)
                 );
@@ -1066,7 +1068,7 @@ impl eframe::App for App {
                     det.push_str(&format!("\nRTT {:.1} ms", r as f64 / 1000.0));
                 }
                 if ws.writes > 0 {
-                    det.push_str(&format!("\nevento→write p50 {:.1} p99 {:.1} ms (n {}) · write {:.2} ms", ws.ev_p50_ms, ws.ev_p99_ms, ws.ev_n, ws.write_avg_ms));
+                    det.push_str(&format!("\n{} p50 {:.1} p99 {:.1} ms (n {}) · write {:.2} ms", t("bar.ev_write"), ws.ev_p50_ms, ws.ev_p99_ms, ws.ev_n, ws.write_avg_ms));
                 }
                 ui.label(format!("{}p {:.0} fps{rtt}", self.vsize.1, self.fps)).on_hover_text(det);
                 if errs > 0 {
@@ -1074,7 +1076,7 @@ impl eframe::App for App {
                 }
                 if !self.captured {
                     ui.separator();
-                    ui.label(egui::RichText::new("clic para capturar").color(theme::GRIS));
+                    ui.label(egui::RichText::new(t("bar.click_to_capture")).color(theme::GRIS));
                 }
                 if let Some((m, t, err)) = &self.note {
                     if t.elapsed() < Duration::from_secs(25) {
@@ -1089,7 +1091,7 @@ impl eframe::App for App {
                     } else {
                         ui.label(label.as_str());
                     }
-                    if ui.small_button("Cancelar (Esc)").clicked() {
+                    if ui.small_button(t("bar.cancel_esc")).clicked() {
                         action = Some(Action::StopJob);
                     }
                 }
@@ -1119,7 +1121,7 @@ impl eframe::App for App {
                 }
             } else {
                 img_rect = avail;
-                let msg = self.video.latest.error().map(|e| format!("Sin vídeo: {e}\n(si dice 'recursos': otro programa o ventana usa la capturadora; se reintenta cada 2 s)")).unwrap_or_else(|| "Esperando vídeo...".into());
+                let msg = self.video.latest.error().map(|e| tf!("vid.none_err", e)).unwrap_or_else(|| t("vid.waiting").into());
                 ui.painter().text(avail.center(), egui::Align2::CENTER_CENTER, msg, egui::FontId::proportional(18.0), Color32::GRAY);
             }
             hov = resp.hovered();
@@ -1129,16 +1131,16 @@ impl eframe::App for App {
         if self.paste_win {
             let mut open = true;
             let mut text = std::mem::take(&mut self.paste_text);
-            egui::Window::new("Escribir texto en el servidor").open(&mut open).default_width(460.0).resizable(true).show(&ctx, |ui| {
-                ui.label(format!("Se teclea con el layout {} ({}).", if self.paste.physical { "us (teclas físicas)" } else { self.layout.as_str() }, if self.paste.physical { "BIOS" } else { "servidor" }));
+            egui::Window::new(t("pw.title")).id(egui::Id::unique("paste-win")).open(&mut open).default_width(460.0).resizable(true).show(&ctx, |ui| {
+                ui.label(tf!("pw.layout", if self.paste.physical { t("pw.us_physical") } else { self.layout.as_str() }, if self.paste.physical { "BIOS" } else { t("pw.server") }));
                 let alto = (ui.available_height() - 32.0).max(120.0); // el cuadro crece con la ventana
                 ui.add_sized([ui.available_width(), alto], egui::TextEdit::multiline(&mut text).desired_rows(8));
                 ui.horizontal(|ui| {
-                    ui.label(format!("{} caracteres", text.chars().count()));
-                    if ui.button("Teclear en el servidor").clicked() {
+                    ui.label(tf!("pw.chars", text.chars().count()));
+                    if ui.button(t("pw.type")).clicked() {
                         action = Some(Action::PasteWinText);
                     }
-                    if ui.button("Limpiar").clicked() {
+                    if ui.button(t("pw.clear")).clicked() {
                         text.clear();
                     }
                 });
@@ -1157,17 +1159,17 @@ impl eframe::App for App {
                     bads.push(*c);
                 }
             }
-            egui::Window::new("Confirmar pegado").collapsible(false).resizable(false).anchor(egui::Align2::CENTER_CENTER, Vec2::ZERO).show(&ctx, |ui| {
-                ui.label(format!("{n} caracteres, {lines} líneas, layout {}; tiempo estimado ~{est:.0} s (+ esperas del enlace).", p.layout));
+            egui::Window::new(t("cp.title")).id(egui::Id::unique("confirm-paste")).collapsible(false).resizable(false).anchor(egui::Align2::CENTER_CENTER, Vec2::ZERO).show(&ctx, |ui| {
+                ui.label(tf!("cp.summary", n, lines, p.layout, format!("{est:.0}")));
                 if !p.bad.is_empty() {
-                    ui.colored_label(theme::AMBAR, format!("{} caracteres NO representables en este layout (se saltarán): {}", p.bad.len(), bads.iter().map(|c| if c.is_control() { format!("U+{:04X}", *c as u32) } else { c.to_string() }).collect::<Vec<_>>().join(" ")));
+                    ui.colored_label(theme::AMBAR, tf!("cp.bad", p.bad.len(), bads.iter().map(|c| if c.is_control() { format!("U+{:04X}", *c as u32) } else { c.to_string() }).collect::<Vec<_>>().join(" ")));
                 }
                 ui.add(egui::Label::new(egui::RichText::new(preview).monospace().weak()).wrap());
                 ui.horizontal(|ui| {
-                    if ui.button("Teclear").clicked() {
+                    if ui.button(t("cp.type")).clicked() {
                         action = Some(Action::ConfirmPaste);
                     }
-                    if ui.button("Cancelar").clicked() {
+                    if ui.button(t("w.cancel")).clicked() {
                         action = Some(Action::CancelPending);
                     }
                 });
@@ -1182,6 +1184,7 @@ impl eframe::App for App {
                 self.note(msg, false);
             }
             Some(crate::settings::Change::Led(l)) => self.send(Cmd::SetLed(l)),
+            Some(crate::settings::Change::Lang) => ctx.send_viewport_cmd(egui::ViewportCommand::Title(t("app.title").into())),
             None => {}
         }
         self.tools.show(&ctx);

@@ -11,6 +11,7 @@ mod app;
 mod clip;
 mod dlog;
 mod hook;
+mod i18n;
 mod settings;
 mod theme;
 mod tools;
@@ -108,6 +109,7 @@ fn main() -> eframe::Result {
     if let Some(p) = &a.log {
         dlog::init(p);
     }
+    i18n::init();
     riotkvm_core::rt::timer_resolution_1ms(); // temporizadores de 1 ms (sleep/esperas de los hilos de entrada y BLE)
     let saved = app::load_video_mode();
     let (sw, sh, sfps) = saved.unwrap_or((1280, 720, 60));
@@ -166,9 +168,9 @@ fn main() -> eframe::Result {
     let choice = Choice::parse(Some(port.as_str()), false);
     let transport_desc = match &choice {
         Choice::Auto | Choice::Ble => "BLE".to_string(),
-        Choice::BleMock => "BLE simulado".to_string(),
+        Choice::BleMock => i18n::t("tr.ble_mock").to_string(),
         Choice::Mock => "mock".to_string(),
-        Choice::Serial(p) => p.clone().unwrap_or_else(|| "serie".into()),
+        Choice::Serial(p) => p.clone().unwrap_or_else(|| i18n::t("tr.serial").into()),
     };
     // BLE se reconecta solo dentro del transporte: el conector se llama una vez. Si no hay adaptador BLE
     // (y hay un dongle por serie), cae a serie para que "abrir y funcionar" siga valiendo.
@@ -218,7 +220,7 @@ fn main() -> eframe::Result {
     };
     let layout = riotkvm_core::config::effective_layout(a.layout.as_deref());
     let layout = riotkvm_core::layouts::canonical(&layout).unwrap_or("es").to_string();
-    let mut vb = eframe::egui::ViewportBuilder::default().with_title("RiotKVM - KVM de bolsillo").with_inner_size([1100.0, 700.0]);
+    let mut vb = eframe::egui::ViewportBuilder::default().with_title(i18n::t("app.title")).with_inner_size([1100.0, 700.0]);
     if let Ok(img) = image::load_from_memory(include_bytes!("../assets/skull_64.png")) {
         let img = img.to_rgba8();
         let (w, h) = img.dimensions();

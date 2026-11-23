@@ -4,7 +4,8 @@
 //! mensajes por canal (mismo patrón que la enumeración de cámaras de `app.rs`); la UI se repinta al recibirlos.
 //! La cancelación es la de `riotkvm_flash::Cancel`: solo surte efecto ANTES de empezar a escribir.
 
-use crate::theme;
+use crate::i18n::t;
+use crate::{theme, tf};
 use riotkvm_flash::disks::{self, Disk};
 use riotkvm_flash::flash::{self, FlashOptions, ImageKind, Installed, Outcome};
 use riotkvm_flash::release::{self, Availability, FirmwareOffer};
@@ -213,14 +214,14 @@ impl Tools {
             self.tab = Tab::Firmware;
         }
         let mut open = self.open;
-        egui::Window::new("Tools").open(&mut open).default_width(560.0).resizable(true).show(ctx, |ui| {
+        egui::Window::new(t("top.tools")).id(egui::Id::unique("tools")).open(&mut open).default_width(560.0).resizable(true).show(ctx, |ui| {
             ui.horizontal(|ui| {
                 let busy = self.job.is_some();
                 ui.add_enabled_ui(!busy, |ui| {
-                    if ui.selectable_value(&mut self.tab, Tab::Firmware, "Firmware del dongle").clicked() {
+                    if ui.selectable_value(&mut self.tab, Tab::Firmware, t("tl.tab_fw")).clicked() {
                         self.result = None;
                     }
-                    if ui.selectable_value(&mut self.tab, Tab::Sd, "microSD con Ventoy").clicked() {
+                    if ui.selectable_value(&mut self.tab, Tab::Sd, t("tl.tab_sd")).clicked() {
                         self.result = None;
                         if self.disks.is_none() {
                             self.refresh_disks(ctx);
@@ -247,7 +248,7 @@ impl Tools {
     fn ui_job(&mut self, ui: &mut egui::Ui) {
         if let Some(j) = &self.job {
             ui.separator();
-            ui.label(egui::RichText::new(&j.label).strong());
+            ui.label(egui::RichText::new(&j.label).strong().color(theme::HUESO));
             match &j.progress {
                 Some(p) if p.total > 0 => {
                     ui.add(egui::ProgressBar::new(p.done as f32 / p.total as f32).text(format!("{} · {}", p.stage, pct(p))));
@@ -263,8 +264,8 @@ impl Tools {
                 }
             }
             if j.writing {
-                ui.colored_label(theme::AMBAR, "escribiendo: no desenchufes nada (ya no se puede cancelar)");
-            } else if ui.button("Cancelar").clicked() {
+                ui.colored_label(theme::AMBAR, t("tl.writing"));
+            } else if ui.button(t("w.cancel")).clicked() {
                 j.cancel.cancel();
             }
         }
@@ -276,7 +277,7 @@ impl Tools {
             };
         }
         if !self.log.is_empty() {
-            egui::CollapsingHeader::new(format!("detalles ({})", self.log.len())).default_open(self.job.is_some()).show(ui, |ui| {
+            egui::CollapsingHeader::new(tf!("tl.details", self.log.len())).id_salt("tools-log").default_open(self.job.is_some()).show(ui, |ui| {
                 egui::ScrollArea::vertical().max_height(140.0).stick_to_bottom(true).show(ui, |ui| {
                     for l in &self.log {
                         ui.label(egui::RichText::new(l).small());
@@ -296,77 +297,77 @@ impl Tools {
     fn ui_firmware(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
         let busy = self.job.is_some();
         egui::Grid::new("fw").num_columns(2).spacing([12.0, 6.0]).show(ui, |ui| {
-            ui.label("Instalada:");
+            ui.label(t("tl.installed"));
             ui.label(match &self.installed {
                 Some(i) => i.describe(),
-                None if self.checking => "comprobando...".into(),
+                None if self.checking => t("tl.checking").into(),
                 None => "?".into(),
             });
             ui.end_row();
-            ui.label("Publicada:");
+            ui.label(t("tl.published"));
             match &self.avail {
-                None => ui.label(if self.checking { "consultando GitHub..." } else { "?" }),
-                Some(Err(e)) if e.to_string().ends_with("(404)") => ui.colored_label(theme::GRIS, "aún no hay ninguna release publicada"),
-                Some(Err(e)) => ui.colored_label(theme::ROJO, format!("no se pudo consultar: {e}")),
+                None => ui.label(if self.checking { t("tl.querying") } else { "?" }),
+                Some(Err(e)) if e.to_string().ends_with("(404)") => ui.colored_label(theme::GRIS, t("tl.no_release")),
+                Some(Err(e)) => ui.colored_label(theme::ROJO, tf!("tl.query_failed", e)),
                 Some(Ok(Availability::None { reason, .. })) => ui.colored_label(theme::AMBAR, reason),
                 Some(Ok(Availability::Offer(o))) => ui.label(format!("{} ({}, {}, SHA-256 {:?})", o.version, o.tag, o.asset, o.sha_source)),
             };
             ui.end_row();
         });
         ui.add_enabled_ui(!busy && !self.checking, |ui| {
-            if ui.small_button("Comprobar otra vez").clicked() {
+            if ui.small_button(t("tl.check_again")).clicked() {
                 self.refresh_fw(ctx);
             }
         });
         ui.separator();
 
         ui.add_enabled_ui(!busy, |ui| {
-            ui.label(egui::RichText::new("qué flashear").color(theme::GRIS));
-            ui.radio_value(&mut self.source, FwSource::Release, "la última release (verificada por SHA-256)");
-            ui.radio_value(&mut self.source, FwSource::File, "un factory.bin propio (se escribe en 0x0)");
+            ui.label(egui::RichText::new(t("tl.what")).color(theme::GRIS));
+            ui.radio_value(&mut self.source, FwSource::Release, t("tl.src_release"));
+            ui.radio_value(&mut self.source, FwSource::File, t("tl.src_file"));
             if self.source == FwSource::File {
                 ui.horizontal(|ui| {
-                    ui.add(egui::TextEdit::singleline(&mut self.file).hint_text("ruta del .bin (o arrástralo a la ventana)").desired_width(400.0));
+                    ui.add(egui::TextEdit::singleline(&mut self.file).hint_text(t("tl.file_hint")).desired_width(400.0));
                 });
-                ui.colored_label(theme::AMBAR, "Binario propio: NO se verifica su origen. Se comprueba que la cabecera sea del mismo chip que el conectado; en un ESP32-S3 que no sea el T-Dongle-S3 solo tiene sentido con tu propio firmware.");
+                ui.colored_label(theme::AMBAR, t("tl.file_warn"));
             }
             ui.horizontal(|ui| {
-                ui.label("puerto:");
-                let sel = self.port.clone().unwrap_or_else(|| "automático (dongle RiotKVM o ROM 303A)".into());
+                ui.label(t("tl.port"));
+                let sel = self.port.clone().unwrap_or_else(|| t("tl.port_auto").into());
                 egui::ComboBox::from_id_salt("fw-port").selected_text(sel).width(330.0).show_ui(ui, |ui| {
-                    ui.selectable_value(&mut self.port, None, "automático (dongle RiotKVM o ROM 303A)");
+                    ui.selectable_value(&mut self.port, None, t("tl.port_auto"));
                     for p in &self.ports {
                         ui.selectable_value(&mut self.port, Some(p.name.clone()), p.label());
                     }
                 });
-                if ui.small_button("↻").on_hover_text("volver a buscar puertos").clicked() {
+                if ui.small_button("↻").on_hover_text(t("tl.rescan_tip")).clicked() {
                     self.ports = usb::scan();
                 }
             });
-            ui.checkbox(&mut self.allow_downgrade, "permitir bajar de versión");
-            ui.checkbox(&mut self.dry_run, "simulación (no abre el puerto ni escribe nada)");
+            ui.checkbox(&mut self.allow_downgrade, t("tl.downgrade"));
+            ui.checkbox(&mut self.dry_run, t("tl.dry_run"));
         });
 
         // comprobaciones previas en la UI (el hilo las repite)
         let mut blocker: Option<String> = None;
         if self.source == FwSource::Release {
             match self.offer() {
-                None => blocker = Some("no hay firmware publicado para flashear: elige un .bin propio".into()),
+                None => blocker = Some(t("tl.no_fw_pick_bin").into()),
                 Some(o) => {
                     let cur = self.installed.as_ref().and_then(|i| i.version);
                     let v = release::compare(cur, o.version);
                     match v {
                         release::Verdict::Upgrade => {
-                            ui.colored_label(theme::VERDE, format!("hay versión nueva: {} → {}", cur.map(|c| c.to_string()).unwrap_or_default(), o.version));
+                            ui.colored_label(theme::VERDE, tf!("tl.upgrade", cur.map(|c| c.to_string()).unwrap_or_default(), o.version));
                         }
                         release::Verdict::Same => {
-                            ui.label("ya tienes esa versión (se puede reinstalar)");
+                            ui.label(t("tl.same"));
                         }
                         release::Verdict::Downgrade => {
-                            ui.colored_label(theme::AMBAR, "la publicada es MÁS ANTIGUA que la instalada");
+                            ui.colored_label(theme::AMBAR, t("tl.older"));
                         }
                         release::Verdict::Unknown => {
-                            ui.label("versión instalada desconocida: se instalará la publicada");
+                            ui.label(t("tl.unknown"));
                         }
                     }
                     if let Err(e) = release::may_flash(v, self.allow_downgrade) {
@@ -375,16 +376,16 @@ impl Tools {
                 }
             }
         } else if self.file.trim().is_empty() {
-            blocker = Some("elige el fichero .bin".into());
+            blocker = Some(t("tl.pick_bin").into());
         }
         if let Some(b) = &blocker {
             ui.colored_label(theme::GRIS, b);
         }
-        ui.label(egui::RichText::new(flash::BOOT_HELP).small().color(theme::GRIS)).on_hover_text("si el dongle no responde a la orden bootloader (firmware roto o ajeno)");
+        ui.label(egui::RichText::new(flash::BOOT_HELP).small().color(theme::GRIS)).on_hover_text(t("tl.boot_tip"));
 
         ui.add_enabled_ui(!busy && blocker.is_none(), |ui| {
             if !self.confirm_flash {
-                if ui.button(if self.dry_run { "Simular flasheo" } else { "Flashear..." }).clicked() {
+                if ui.button(if self.dry_run { t("tl.simulate") } else { t("tl.flash") }).clicked() {
                     if self.dry_run {
                         self.launch_flash(ctx);
                     } else {
@@ -393,13 +394,13 @@ impl Tools {
                 }
             } else {
                 ui.horizontal(|ui| {
-                    ui.colored_label(theme::AMBAR, "El dongle se reiniciará en modo descarga y se reescribirá su flash entera.");
+                    ui.colored_label(theme::AMBAR, t("tl.flash_warn"));
                 });
                 ui.horizontal(|ui| {
-                    if ui.button("Sí, flashear").clicked() {
+                    if ui.button(t("tl.yes_flash")).clicked() {
                         self.launch_flash(ctx);
                     }
-                    if ui.button("No").clicked() {
+                    if ui.button(t("tl.no")).clicked() {
                         self.confirm_flash = false;
                     }
                 });
@@ -415,7 +416,7 @@ impl Tools {
         let offer = self.offer().cloned();
         let cur = self.installed.as_ref().and_then(|i| i.version);
         let allow = self.allow_downgrade;
-        self.start(ctx, if self.dry_run { "Simulación del flasheo" } else { "Flasheando el firmware" }, move |rep, cancel| {
+        self.start(ctx, if self.dry_run { t("tl.job_dry") } else { t("tl.job_flash") }, move |rep, cancel| {
             let e = |e: riotkvm_flash::Error| e.to_string();
             let (image, kind) = match src {
                 FwSource::File => {
@@ -424,7 +425,7 @@ impl Tools {
                     (d, ImageKind::Custom)
                 }
                 FwSource::Release => {
-                    let o = offer.ok_or("no hay firmware publicado")?;
+                    let o = offer.ok_or(t("tl.no_fw"))?;
                     release::may_flash(release::compare(cur, o.version), allow).map_err(e)?;
                     (release::fetch_firmware(&o, rep, cancel).map_err(e)?, ImageKind::Official(o.version))
                 }
@@ -434,11 +435,11 @@ impl Tools {
                     for l in &plan {
                         rep.log(l);
                     }
-                    Ok("simulación correcta: no se ha tocado el dongle (detalles abajo)".into())
+                    Ok(t("tl.dry_ok").into())
                 }
                 Outcome::Done { chip, flash_mb, version_after, .. } => Ok(match version_after {
-                    Some(v) => format!("flasheado ({chip}, {} MB): el dongle arranca con fw={v}", flash_mb.unwrap_or(0)),
-                    None => format!("flasheado ({chip}); el dongle no ha confirmado la versión (¿desenchufar y enchufar?)"),
+                    Some(v) => tf!("tl.flashed", chip, flash_mb.unwrap_or(0), v),
+                    None => tf!("tl.flashed_nover", chip),
                 }),
             }
         });
@@ -446,17 +447,14 @@ impl Tools {
 
     fn ui_sd(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
         let busy = self.job.is_some();
-        ui.label(format!(
-            "Escribe Ventoy {} en modo MBR (arranca en BIOS legacy —HP Gen8/N40L— y en UEFI) con ventoy.json (menú en árbol) y la carpeta /Tools en la partición exFAT «Ventoy». BORRA todo el disco.",
-            ventoy::VERSION
-        ));
-        ui.colored_label(theme::AMBAR, "A través del dongle la SD va a ~1 MB/s: prepárala y copia las ISO mejor con un lector de tarjetas.");
+        ui.label(tf!("tl.sd_intro", ventoy::VERSION));
+        ui.colored_label(theme::AMBAR, t("tl.sd_slow"));
         if cfg!(windows) {
-            ui.colored_label(theme::ROJO, "Aún no soportado en Windows: usa macOS o Linux (o `riotkvm sd ventoy`).");
+            ui.colored_label(theme::ROJO, t("tl.sd_windows"));
             return;
         }
         ui.add_enabled_ui(!busy, |ui| {
-            if ui.small_button("Actualizar lista de discos").clicked() {
+            if ui.small_button(t("tl.refresh_disks")).clicked() {
                 self.refresh_disks(ctx);
             }
         });
@@ -472,7 +470,7 @@ impl Tools {
             Some(Ok(v)) => v.clone(),
         };
         if list.is_empty() {
-            ui.label("No hay discos externos ni lectores de tarjetas. Pon el dongle en modo A o C (o usa un lector) y actualiza.");
+            ui.label(t("tl.no_disks"));
             return;
         }
         ui.add_enabled_ui(!busy, |ui| {
@@ -489,62 +487,57 @@ impl Tools {
                     }
                 });
                 if let Some(w) = why {
-                    ui.label(egui::RichText::new(format!("    no se puede usar: {w}")).small().color(theme::GRIS));
+                    ui.label(egui::RichText::new(format!("    {}", tf!("tl.unusable", w))).small().color(theme::GRIS));
                 }
             }
         });
         let Some(d) = self.disk_sel.as_ref().and_then(|s| list.iter().find(|d| &d.id == s)).cloned() else {
-            ui.label("Elige un disco.");
+            ui.label(t("tl.pick_disk"));
             return;
         };
         ui.separator();
-        ui.colored_label(theme::HUESO, format!("Contenido actual de {} (se perderá):", d.id));
+        ui.colored_label(theme::HUESO, tf!("tl.contents", d.id));
         for c in d.contents() {
             ui.label(format!("  {c}"));
         }
         if !d.is_riotkvm() && !d.is_card_reader() {
-            ui.colored_label(theme::AMBAR, "Ojo: no parece ni el dongle ni un lector de tarjetas.");
+            ui.colored_label(theme::AMBAR, t("tl.odd_disk"));
         }
         if let Err(e) = ventoy::plan(d.size) {
             ui.colored_label(theme::ROJO, e.to_string());
             return;
         }
-        ui.label(egui::RichText::new("Copia tus ISOs a la SD: instaladores en la raíz, herramientas en /Tools.").color(theme::CIAN));
+        ui.label(egui::RichText::new(t("tl.copy_isos")).color(theme::CIAN));
         ui.add_enabled_ui(!busy, |ui| {
             ui.horizontal(|ui| {
-                ui.label(format!("Para confirmar escribe «{}»:", d.id));
+                ui.label(tf!("tl.confirm", d.id));
                 ui.add(egui::TextEdit::singleline(&mut self.confirm_text).desired_width(90.0));
             });
             let ok = disks::confirmed(&d, &self.confirm_text);
-            if ui.add_enabled(ok, egui::Button::new(format!("Borrar {} y escribir Ventoy", d.id))).clicked() {
+            if ui.add_enabled(ok, egui::Button::new(tf!("tl.erase", d.id))).clicked() {
                 self.launch_ventoy(ctx, d.clone());
             }
-            ui.label(egui::RichText::new("Pedirá la contraseña de administrador una vez (macOS: authopen; Linux: udisks2/polkit). Al terminar se relee todo para verificar.").small().color(theme::GRIS));
+            ui.label(egui::RichText::new(t("tl.admin")).small().color(theme::GRIS));
         });
     }
 
     fn launch_ventoy(&mut self, ctx: &egui::Context, d: Disk) {
         let files = ventoy::theme::sd_files();
-        self.start(ctx, &format!("Ventoy en {}", d.id), move |rep, cancel| {
+        self.start(ctx, &tf!("tl.job_ventoy", d.id), move |rep, cancel| {
             let e = |e: riotkvm_flash::Error| e.to_string();
             // paquete primero: si la descarga falla, el disco queda intacto
             let pkg = ventoy::package::load(rep, cancel).map_err(e)?;
             cancel.check().map_err(e)?;
             let d = disks::recheck(&d).map_err(e)?;
-            riotkvm_flash::stage(rep, format!("desmontando {}", d.id));
+            riotkvm_flash::stage(rep, tf!("tl.unmounting", d.id));
             disks::unmount(&d).map_err(e)?;
-            riotkvm_flash::stage(rep, "pidiendo permiso para escribir el disco");
+            riotkvm_flash::stage(rep, t("tl.asking"));
             let mut dev = riotkvm_flash::rawdev::open_device(&d.raw_path, d.size).map_err(e)?;
             let rnd = ventoy::Randomness::new().map_err(e)?;
             let p = ventoy::install(&mut dev, &pkg, &rnd, &files, rep, cancel).map_err(e)?;
             ventoy::verify(&mut dev, &pkg, &rnd, &files, rep).map_err(e)?;
             drop(dev);
-            Ok(format!(
-                "Ventoy {} escrito y verificado en {} (exFAT «Ventoy» de {}). Copia tus ISOs: instaladores en la raíz, herramientas en /Tools.",
-                ventoy::VERSION,
-                d.id,
-                riotkvm_flash::human_size(p.part1_sectors() * 512)
-            ))
+            Ok(tf!("tl.ventoy_done", ventoy::VERSION, d.id, riotkvm_flash::human_size(p.part1_sectors() * 512)))
         });
     }
 }
