@@ -3,6 +3,8 @@
 //! como la API `qkvm`. Límite de memoria y corte por tiempo (interrupt handler).
 
 use rquickjs::{CaughtError, Context, Function, Promise, Runtime, Value};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::time::Instant;
 
 pub struct Outcome {
@@ -12,8 +14,8 @@ pub struct Outcome {
     pub error: Option<String>,
 }
 
-/// `host(op, args_json) -> Ok(json) | Err(mensaje)`.
-pub fn run(code: &str, prelude: &str, deadline: Instant, host: impl Fn(&str, &str) -> Result<String, String> + 'static) -> Outcome {
+/// `host(op, args_json) -> Ok(json) | Err(mensaje)`. Se corta al pasar `deadline` o al activarse `cancel`.
+pub fn run(code: &str, prelude: &str, deadline: Instant, cancel: Arc<AtomicBool>, host: impl Fn(&str, &str) -> Result<String, String> + 'static) -> Outcome {
     let fail = |e: String| Outcome { ok: false, result: "undefined".into(), error: Some(e) };
     let rt = match Runtime::new() {
         Ok(r) => r,
@@ -21,7 +23,9 @@ pub fn run(code: &str, prelude: &str, deadline: Instant, host: impl Fn(&str, &st
     };
     rt.set_memory_limit(64 * 1024 * 1024);
     rt.set_max_stack_size(1024 * 1024);
-    rt.set_interrupt_handler(Some(Box::new(move || Instant::now() >= deadline)));
+    let stop = cancel.clone();
+    rt.set_interrupt_handler(Some(Box::new(move || Instant::now() >= deadline || stop.load(Ordering::Relaxed))));
+    let nice = |m: String| nice(m, deadline, &cancel);
     let ctx = match Context::full(&rt) {
         Ok(c) => c,
         Err(e) => return fail(format!("no se pudo crear el contexto JS: {e}")),
@@ -44,21 +48,25 @@ pub fn run(code: &str, prelude: &str, deadline: Instant, host: impl Fn(&str, &st
             return fail(format!("prelude: {}", CaughtError::from_error(&ctx, e)));
         }
         // Se admiten tres formas: una función (estilo Cloudflare, `async () => { ... }`), que se llama;
-        // una expresión suelta (`qkvm.status()`), cuyo valor se devuelve; o un cuerpo con `await`/`return`.
+        // una expresión suelta (`riotkvm.status()`, también con `await`), cuyo valor se devuelve; o un cuerpo con
+        // `await`/`return`. Se COMPILA primero (AsyncFunction solo analiza, no ejecuta) y se ejecuta una sola vez:
+        // un SyntaxError en tiempo de ejecución (JSON.parse) no debe provocar un segundo intento.
         let quoted = serde_json::to_string(code.trim()).unwrap_or_default();
         let src = format!(
             r#"(async () => {{
   const __src = {quoted};
-  let __f, __expr = true;
-  try {{ __f = (0, eval)("(" + __src + "\n)"); }}
-  catch (e) {{ if (!(e instanceof SyntaxError)) throw e; __expr = false; }}
-  if (__expr) return typeof __f === 'function' ? await __f() : await __f;
-  return await (0, eval)("(async () => {{\n" + __src + "\n}})()");
+  const __AF = (async function () {{}}).constructor;
+  let __f;
+  try {{ __f = new __AF("return (" + __src + "\n);"); }}
+  catch (e) {{ if (!(e instanceof SyntaxError)) throw e; __f = new __AF(__src); }}
+  let __v = await __f();
+  if (typeof __v === 'function') __v = await __v();
+  return __v;
 }})()"#
         );
         let promise: Promise = match ctx.eval(src) {
             Ok(p) => p,
-            Err(e) => return fail(nice(CaughtError::from_error(&ctx, e).to_string(), deadline)),
+            Err(e) => return fail(nice(CaughtError::from_error(&ctx, e).to_string())),
         };
         match promise.finish::<Value>() {
             Ok(v) => {
@@ -76,24 +84,35 @@ pub fn run(code: &str, prelude: &str, deadline: Instant, host: impl Fn(&str, &st
             Err(rquickjs::Error::WouldBlock) => fail(
                 "el código quedó esperando una promesa que nunca se resuelve (en el sandbox no hay red ni temporizadores reales; usa await qkvm.sleep(s))".into(),
             ),
-            Err(e) => fail(nice(CaughtError::from_error(&ctx, e).to_string(), deadline)),
+            Err(e) => fail(nice(CaughtError::from_error(&ctx, e).to_string())),
         }
     })
 }
 
 /// Primera línea del error (sin el "Error: " de JS) + solo las líneas de la traza que apuntan al código del
 /// modelo (`<input>`), no al prelude.
-fn nice(msg: String, deadline: Instant) -> String {
+fn nice(msg: String, deadline: Instant, cancel: &AtomicBool) -> String {
+    if cancel.load(Ordering::Relaxed) && (msg.contains("interrupted") || msg.contains("cancelado")) {
+        return "cancelado por el cliente (notifications/cancelled)".into();
+    }
     if Instant::now() >= deadline && (msg.contains("interrupted") || msg.contains("tiempo agotado")) {
         return "tiempo agotado (timeoutSeconds): se cortó la ejecución".into();
     }
     let mut lines = msg.lines();
     let first = lines.next().unwrap_or("").trim();
     let first = first.strip_prefix("Error: ").unwrap_or(first);
-    let at: Vec<&str> = lines.filter(|l| l.contains("<input>")).map(str::trim).collect();
+    // `<input>:L:C` cuenta las 2 líneas de cabecera que añade AsyncFunction: se dan en líneas del código del modelo
+    let mut at: Vec<String> = lines.filter_map(|l| input_line(l).map(|n| format!("línea {n}"))).collect();
+    at.dedup();
     if at.is_empty() {
         first.to_string()
     } else {
         format!("{first} ({})", at.join(", "))
     }
+}
+
+fn input_line(l: &str) -> Option<usize> {
+    let rest = &l[l.find("<input>:")? + "<input>:".len()..];
+    let n: usize = rest.split(|c: char| !c.is_ascii_digit()).next()?.parse().ok()?;
+    Some(n.saturating_sub(2).max(1))
 }
