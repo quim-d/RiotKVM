@@ -18,7 +18,7 @@ Estado: **etapa 1** (solo CDC de texto). El protocolo BLE binario versionado se 
 | `ma x y [rueda]` | Ratón absoluto, x,y recortados a 0..32767 (un informe absoluto (0,0) sin botones se envia como x=1: Windows descarta el todo-cero) | `ok` / `err ...` |
 | `mbr mask` / `mba mask` | Botones del ratón relativo / absoluto (bits 0..4; > 0x1F -> `err range`) | `ok` / `err ...` |
 | `status` | `host=<0/1 enumerado> leds=0xNN hidready=<0/1> susp=<0/1> proto=<boot/report> sd=<0/1> mode=<A/B/C> ble=<0/1> mtu=N ble_itvl_ms=X` | linea |
-| `info` | `fw=etapa2 name=QKVM proto=1 mode= rst= crashes= safe= ble_started= [diag BLE] build="..." sd_mb= boot_sd_ms= boot_usb_ms= sd_init_ms= cfg_len= n_itf=` (`proto=` es la version del protocolo BLE; `rst` = esp_reset_reason; `safe=1` = BLE desactivado tras 2 caidas) | linea |
+| `info` | `fw=X.Y.Z name=QKVM proto=1 mode= rst= crashes= safe= ble_started= [diag BLE] build="..." sd_mb= boot_sd_ms= boot_usb_ms= sd_init_ms= cfg_len= n_itf=` (`fw=` es la version semver del firmware, de `src/version.h`; firmwares anteriores al versionado respondian `fw=etapa2`; `proto=` es la version del protocolo BLE; `rst` = esp_reset_reason; `safe=1` = BLE desactivado tras 2 caidas) | linea |
 | `stats` / `stats reset` | Contadores (dos lineas): HID (`cmd_*`: desde el evento RX hasta que termina el envio; `snd_*`: duracion de la llamada tud_hid_n_report (envio sin espera, desde la etapa de latencia)) y SD (`sd_*`) | lineas / `ok` |
 | `rep` | Diagnostico HID: por ID de informe (1 teclado, 2 raton rel, 3 raton abs) `idN n=<enviados> fail=<fallos> last=<ultimos bytes en hex, sin el ID>`. ID3: byte0 = botones (bits 0..4), luego X (u16 LE), Y (u16 LE), rueda, pan. `stats reset` lo pone a cero | linea |
 | `lat` | Latencia interna del dongle en us, UNA linea: `queue n= avg= max= h=b0,..,b7 deliver n= avg= max= h=...`. `queue` = recepcion (evento RX CDC o escritura BLE) -> inicio de ejecucion; `deliver` = recepcion -> fin de la transferencia IN del informe HID (el host ya lo leyo; incluye hasta 1 ms de sondeo USB). Buckets (us): <250,<500,<1000,<2000,<4000,<8000,<16000,>=16000. `stats reset` tambien la pone a cero. Solo cuentan `kd/ku/mm/ma/mbr/mba` por CDC y escrituras BLE (no `type`) | linea |
@@ -110,9 +110,12 @@ Codigos ERR: 1 `BUSY` (informe perdido: endpoint ocupado/host suspendido que no 
 [1] fw_major   [2] fw_minor
 [3] mode       (0=A,1=B,2=C)
 [4..5] caps u16: bit0 teclado, bit1 raton rel, bit2 raton abs, bit3 MSC/SD, bit4 SET_MODE, bit5 PING
-[6..7] reservado (0)
+[6] fw_patch
+[7] reservado (0)
 ```
 Se puede leer en cualquier momento (no hace falta suscribirse).
+
+Version del firmware = `fw_major.fw_minor.fw_patch` (semver, fuente unica `src/version.h`). `fw_patch` ocupa el byte [6], antes "reservado (0)": es compatible con proto=1 porque los clientes anteriores solo leen [0..5], y un firmware anterior lo deja a 0 (se lee como `X.Y.0`). No sube `proto_version`. Los clientes deben seguir ignorando el byte [7] y aceptar INFO de mas de 8 bytes.
 
 ## Orden de peticiones recomendado para el cliente
 1. Escanear por UUID de servicio (o nombre `QKVM` (antes `QuimKVM`; el UUID no cambia, el cliente busca por UUID)); conectar; negociar MTU (247).

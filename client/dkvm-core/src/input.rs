@@ -104,6 +104,12 @@ impl Kvm {
         self.raw(&P::info())
     }
 
+    /// Versión del firmware según `info` (CDC o BLE). `Ok(None)` si el firmware no la publica en semver
+    /// (p. ej. `fw=etapa2` de firmwares anteriores al versionado, o el mock CDC).
+    pub fn fw_version(&mut self) -> Result<Option<crate::FwVersion>> {
+        Ok(crate::FwVersion::from_info_reply(&self.info()?))
+    }
+
     /// Contadores del dongle (dos líneas: HID y SD) o `reset`.
     pub fn stats(&mut self, reset: bool) -> Result<String> {
         self.raw(&P::stats(reset))

@@ -242,6 +242,7 @@ fn type_fw_splits_long_lines_on_char_boundaries() {
 fn info_and_stats_on_mock() {
     let (mut k, _) = kvm("es");
     assert!(k.info().unwrap().starts_with("fw="));
+    assert_eq!(k.fw_version().unwrap(), None, "el mock CDC responde fw=mock: no es semver");
     assert_eq!(k.stats(false).unwrap().lines().count(), 2);
     assert_eq!(k.stats(true).unwrap(), "ok");
 }

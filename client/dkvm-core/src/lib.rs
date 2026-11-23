@@ -7,6 +7,7 @@
 pub mod ble_v1;
 pub mod config;
 pub mod error;
+pub mod fw_version;
 pub mod input;
 pub mod keys;
 pub mod latency;
@@ -19,5 +20,6 @@ pub mod session;
 pub mod transport;
 
 pub use error::{Error, Result};
+pub use fw_version::FwVersion;
 pub use input::{abs_from_pixels, parse_screen, Kvm, MouseCoalescer};
 pub use transport::{MockHandle, MockTransport, SerialTransport, Transport};

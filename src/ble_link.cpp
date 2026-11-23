@@ -1,4 +1,5 @@
 #include "ble_link.h"
+#include "version.h"
 #include "hid_dev.h"
 #include "sd_msc.h"
 #include "kvm_mode.h"
@@ -18,7 +19,7 @@ extern "C" bool bleInUse(void) { return true; }
 namespace blelink {
 namespace {
 
-constexpr uint8_t PROTO_VER = 1, FW_MAJOR = 1, FW_MINOR = 0;
+constexpr uint8_t PROTO_VER = QKVM_BLE_PROTO, FW_MAJOR = QKVM_FW_MAJOR, FW_MINOR = QKVM_FW_MINOR, FW_PATCH = QKVM_FW_PATCH;
 constexpr uint16_t NONE = 0xFFFF;
 constexpr size_t MAXW = 253;  // ATT_MTU preferido 256 - 3
 
@@ -201,7 +202,7 @@ int chrAccess(uint16_t conn, uint16_t, struct ble_gatt_access_ctxt* ctxt, void* 
   }
   if (which == 4 && ctxt->op == BLE_GATT_ACCESS_OP_READ_CHR) {    // INFO
     uint16_t caps = 0x01 | 0x02 | 0x04 | 0x08 | 0x10 | 0x20;
-    uint8_t b[8] = {PROTO_VER, FW_MAJOR, FW_MINOR, kvmmode::current(), (uint8_t)caps, (uint8_t)(caps >> 8), 0, 0};
+    uint8_t b[8] = {PROTO_VER, FW_MAJOR, FW_MINOR, kvmmode::current(), (uint8_t)caps, (uint8_t)(caps >> 8), FW_PATCH, 0};
     return os_mbuf_append(ctxt->om, b, sizeof b) == 0 ? 0 : BLE_ATT_ERR_INSUFFICIENT_RES;
   }
   return BLE_ATT_ERR_UNLIKELY;

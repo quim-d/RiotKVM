@@ -102,7 +102,8 @@ pub fn state_text(flags: u8, leds: u8, mode: u8) -> String {
     )
 }
 
-/// INFO (8 bytes) -> texto legible.
+/// INFO (8 bytes) -> texto legible. `fw=X.Y.Z` con el patch del byte [6] (0 en firmwares que no lo envían);
+/// la versión estructurada sale de [`crate::FwVersion::from_info`] o de `FwVersion::from_info_reply`.
 pub fn info_text(b: &[u8]) -> String {
     if b.len() < 6 {
         return format!("info ilegible ({} bytes)", b.len());
@@ -110,7 +111,8 @@ pub fn info_text(b: &[u8]) -> String {
     let caps = u16::from_le_bytes([b[4], b[5]]);
     let names = ["teclado", "raton-rel", "raton-abs", "msc/sd", "set-mode", "ping"];
     let c: Vec<&str> = names.iter().enumerate().filter(|(i, _)| caps & (1 << i) != 0).map(|(_, n)| *n).collect();
-    format!("proto={} fw={}.{} mode={} caps={}", b[0], b[1], b[2], mode_letter(b[3]), c.join(","))
+    let fw = crate::FwVersion::from_info(b).expect("len >= 6");
+    format!("proto={} fw={} mode={} caps={}", b[0], fw, mode_letter(b[3]), c.join(","))
 }
 
 fn num(it: &mut std::str::SplitWhitespace, name: &str) -> Result<i64> {
@@ -502,7 +504,10 @@ mod tests {
 
     #[test]
     fn info_text_and_split() {
-        assert_eq!(info_text(&[1, 0, 3, 2, 0b100111, 0, 0, 0]), "proto=1 fw=0.3 mode=C caps=teclado,raton-rel,raton-abs,ping");
+        assert_eq!(info_text(&[1, 0, 3, 2, 0b100111, 0, 0, 0]), "proto=1 fw=0.3.0 mode=C caps=teclado,raton-rel,raton-abs,ping");
+        assert_eq!(info_text(&[1, 1, 0, 2, 0b111111, 0, 7, 0]), "proto=1 fw=1.0.7 mode=C caps=teclado,raton-rel,raton-abs,msc/sd,set-mode,ping");
+        // 6 bytes (sin [6..7]) sigue siendo legible: patch 0
+        assert_eq!(info_text(&[1, 1, 2, 0, 1, 0]), "proto=1 fw=1.2.0 mode=A caps=teclado");
         let buf = [record(KEY_DOWN, &[4]), record(RELEASE_ALL, &[])].concat();
         let (r, trunc) = split_records(&buf);
         assert_eq!(r.len(), 2);
@@ -575,6 +580,7 @@ mod tests {
         let d = MockDongle::new();
         let mut t = BleTransport::open(d.connector(), Box::new(BleV1), BleOptions::default(), std::time::Duration::from_secs(20)).unwrap();
         let r = t.send("info", true).unwrap().unwrap();
-        assert!(r.starts_with("proto=1 fw=0.1 mode=C caps=teclado,raton-rel,raton-abs"), "{r}");
+        assert!(r.starts_with("proto=1 fw=0.1.0 mode=C caps=teclado,raton-rel,raton-abs"), "{r}");
+        assert_eq!(crate::FwVersion::from_info_reply(&r), Some(crate::FwVersion::new(0, 1, 0)));
     }
 }
