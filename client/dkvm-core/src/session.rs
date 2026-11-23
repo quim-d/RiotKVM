@@ -37,6 +37,9 @@ pub enum Cmd {
     Paste(PasteJob),
     /// Escribe texto con el layout del destino.
     Type(String),
+    /// Cambia las opciones de la sesión en caliente (camino de los clics del ratón absoluto). Se aplica en su sitio de la
+    /// cola: lo anterior sale con las opciones viejas y lo posterior con las nuevas; si hay botones mantenidos se sueltan.
+    SetOpts(SessionOpts),
     ReleaseAll,
     Quit,
 }
@@ -58,16 +61,80 @@ impl std::fmt::Debug for PasteJob {
 }
 
 /// Opciones de la sesión.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SessionOpts {
     /// En modo ABSOLUTO, botones y rueda salen por el ratón RELATIVO (`mbr`, rueda `mm`) justo tras el `ma` de la posición.
     /// Defecto true (workaround: el Fedora no reacciona a los botones del informe absoluto). `DKVM_ABS_BUTTONS=abs` lo desactiva.
+    /// Se cambia en caliente con `Cmd::SetOpts` (la GUI lo elige según el sistema del equipo controlado, ver `TargetOs`).
     pub abs_buttons_via_rel: bool,
 }
 
 impl Default for SessionOpts {
     fn default() -> Self {
-        SessionOpts { abs_buttons_via_rel: std::env::var("DKVM_ABS_BUTTONS").map(|v| v != "abs").unwrap_or(true) }
+        SessionOpts { abs_buttons_via_rel: abs_buttons_env_override().unwrap_or(true) }
+    }
+}
+
+/// `DKVM_ABS_BUTTONS`: `abs` -> botones por el informe absoluto (false); cualquier otro valor -> por el relativo (true).
+pub fn parse_abs_buttons(v: &str) -> bool {
+    v.trim() != "abs"
+}
+
+/// Override del entorno (`DKVM_ABS_BUTTONS`), si está definido: manda sobre lo guardado al arrancar.
+pub fn abs_buttons_env_override() -> Option<bool> {
+    std::env::var("DKVM_ABS_BUTTONS").ok().map(|v| parse_abs_buttons(&v))
+}
+
+/// Sistema del equipo controlado: preajuste de compatibilidad para los clics y la rueda del ratón ABSOLUTO.
+/// Comprobado con hardware: Fedora no reacciona a los botones del informe absoluto (necesita el relativo); el macOS
+/// destino solo hace caso a los botones del informe absoluto; Windows funciona por el relativo (el defecto).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TargetOs {
+    Windows,
+    Macos,
+    Linux,
+    Fedora,
+}
+
+impl TargetOs {
+    pub const ALL: [TargetOs; 4] = [TargetOs::Windows, TargetOs::Macos, TargetOs::Linux, TargetOs::Fedora];
+
+    /// Nombre estable (persistencia).
+    pub fn name(self) -> &'static str {
+        match self {
+            TargetOs::Windows => "windows",
+            TargetOs::Macos => "macos",
+            TargetOs::Linux => "linux",
+            TargetOs::Fedora => "fedora",
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            TargetOs::Windows => "Windows",
+            TargetOs::Macos => "macOS",
+            TargetOs::Linux => "Linux (genérico)",
+            TargetOs::Fedora => "Fedora",
+        }
+    }
+
+    pub fn parse(s: &str) -> Option<TargetOs> {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "windows" | "win" => Some(TargetOs::Windows),
+            "macos" | "mac" | "osx" => Some(TargetOs::Macos),
+            "linux" => Some(TargetOs::Linux),
+            "fedora" => Some(TargetOs::Fedora),
+            _ => None,
+        }
+    }
+
+    /// true = clics y rueda por el ratón relativo (workaround); false = por el informe absoluto.
+    pub fn abs_buttons_via_rel(self) -> bool {
+        !matches!(self, TargetOs::Macos)
+    }
+
+    pub fn opts(self) -> SessionOpts {
+        SessionOpts { abs_buttons_via_rel: self.abs_buttons_via_rel() }
     }
 }
 
@@ -184,8 +251,26 @@ fn apply(k: &mut Kvm, co: &mut MouseCoalescer, c: Cmd, opts: SessionOpts) -> Res
         Cmd::Repeat { .. } | Cmd::Paste(_) => Ok(()), // los trata `run` (necesitan eventos y cancelación)
         Cmd::Type(s) => k.type_text(&s, 0.0),
         Cmd::ReleaseAll => k.release_all(),
-        Cmd::Quit | Cmd::MouseAbs { .. } | Cmd::MouseRel { .. } => Ok(()),
+        Cmd::SetOpts(_) | Cmd::Quit | Cmd::MouseAbs { .. } | Cmd::MouseRel { .. } => Ok(()), // `SetOpts` lo trata `run`
     }
+}
+
+/// Cambio de opciones en caliente. El movimiento pendiente ya se vació (lo hace quien llama). Si cambia el camino de los
+/// clics con botones mantenidos, se sueltan por los DOS informes: el destino podría haberlos recibido por cualquiera.
+fn switch_opts(k: &mut Kvm, opts: &mut SessionOpts, new: SessionOpts) -> Result<()> {
+    let held = k.buttons;
+    if new.abs_buttons_via_rel != opts.abs_buttons_via_rel && held != 0 {
+        for rel in [true, false] {
+            k.buttons = held;
+            for name in ["left", "right", "middle"] {
+                if held & crate::input::button_mask(name)? != 0 {
+                    k.button_up(name, rel)?;
+                }
+            }
+        }
+    }
+    *opts = new;
+    Ok(())
 }
 
 fn nap(ms: u64, cancel: &AtomicBool) {
@@ -356,7 +441,7 @@ fn status_event(line: &str) -> Option<Event> {
     })
 }
 
-fn run(connect: &mut Connector, layout: &str, rx: Receiver<Cmd>, emit: &dyn Fn(Event), cancel: &AtomicBool, opts: SessionOpts) {
+fn run(connect: &mut Connector, layout: &str, rx: Receiver<Cmd>, emit: &dyn Fn(Event), cancel: &AtomicBool, mut opts: SessionOpts) {
     let mut kvm: Option<Kvm> = None;
     let mut co = MouseCoalescer::default();
     let mut next_retry = Instant::now();
@@ -413,6 +498,8 @@ fn run(connect: &mut Connector, layout: &str, rx: Receiver<Cmd>, emit: &dyn Fn(E
             Err(RecvTimeoutError::Disconnected) => break,
         }
         let quit = batch.iter().any(|c| matches!(c, Cmd::Quit));
+        // la última `SetOpts` del lote queda vigente aunque no haya enlace (o se corte a mitad de lote)
+        let last_opts = batch.iter().rev().find_map(|c| if let Cmd::SetOpts(o) = c { Some(*o) } else { None });
         let mut failure: Option<Error> = None;
         if let Some(k) = kvm.as_mut() {
             let healing = k.t.self_healing();
@@ -436,6 +523,7 @@ fn run(connect: &mut Connector, layout: &str, rx: Receiver<Cmd>, emit: &dyn Fn(E
                         Cmd::Paste(job) => co.flush_into(k).and_then(|_| paste_run(k, job, cancel, emit)),
                         Cmd::Keys(s) | Cmd::Combo(s) => co.flush_into(k).and_then(|_| keys_run(k, &s, emit)),
                         Cmd::Repeat { combo, interval_ms, secs } => co.flush_into(k).and_then(|_| repeat_run(k, &combo, interval_ms, secs, cancel, emit)),
+                        Cmd::SetOpts(o) => co.flush_into(k).and_then(|_| switch_opts(k, &mut opts, o)),
                         other => apply(k, &mut co, other, opts),
                     };
                     if let Err(e) = r {
@@ -500,6 +588,9 @@ fn run(connect: &mut Connector, layout: &str, rx: Receiver<Cmd>, emit: &dyn Fn(E
         } else {
             // sin conexión la entrada se descarta (no se acumula para reproducirla luego)
             co = MouseCoalescer::default();
+        }
+        if let Some(o) = last_opts {
+            opts = o;
         }
         if let Some(e) = failure {
             if let Some(mut k) = kvm.take() {
@@ -964,5 +1055,134 @@ mod tests {
         wait_until(|| !typed_usages(&link).is_empty());
         // en de la z está en la tecla Y de EE. UU. (0x1C)
         assert_eq!(typed_usages(&link), vec![0x1C]);
+    }
+
+    // ---------- compatibilidad con el SO destino: camino de los clics en caliente ----------
+
+    /// Mapeo SO -> camino, comprobado con hardware: macOS por el informe absoluto; Fedora/Linux/Windows por el relativo.
+    #[test]
+    fn target_os_maps_to_click_path() {
+        assert!(!TargetOs::Macos.abs_buttons_via_rel());
+        assert!(TargetOs::Fedora.abs_buttons_via_rel());
+        assert!(TargetOs::Linux.abs_buttons_via_rel());
+        assert!(TargetOs::Windows.abs_buttons_via_rel());
+        assert_eq!(TargetOs::Macos.opts(), SessionOpts { abs_buttons_via_rel: false });
+        for os in TargetOs::ALL {
+            assert_eq!(TargetOs::parse(os.name()), Some(os), "{os:?}");
+        }
+        assert_eq!(TargetOs::parse(" Mac "), Some(TargetOs::Macos));
+        assert_eq!(TargetOs::parse("beos"), None);
+        assert!(!parse_abs_buttons("abs"));
+        assert!(parse_abs_buttons("rel"));
+    }
+
+    fn sim_rig_opts(via_rel: bool) -> SimRig {
+        use crate::transport::ble::BleOptions;
+        let (t, sim, link) = crate::transport::select::ble_sim(BleOptions::default());
+        let slot = Arc::new(Mutex::new(Some(t)));
+        let s = Session::spawn_with(
+            Box::new(move || slot.lock().unwrap().take().map(|t| Box::new(t) as Box<dyn Transport>).ok_or(Error::DeviceNotFound("consumido".into()))),
+            "us",
+            None,
+            SessionOpts { abs_buttons_via_rel: via_rel },
+        )
+        .unwrap();
+        wait_link(&s);
+        (s, sim, link)
+    }
+
+    /// `SetOpts` en mitad de un ÚNICO lote: el clic anterior sale por el relativo en su posición, el posterior por el
+    /// absoluto en la suya; el movimiento no se fusiona a través de los botones y la rueda sigue el camino vigente.
+    /// (Dos `ma` seguidos sin botón entre medias sí pueden fusionarse en el hilo BLE: el cambio no viaja al dongle.)
+    #[test]
+    fn set_opts_switches_click_path_live_in_order() {
+        use crate::ble_v1::{BUTTONS_ABS, BUTTONS_REL, MOUSE_ABS, MOUSE_REL};
+        let (s, sim, link) = sim_rig_opts(true);
+        // lote determinista: el hilo queda ocupado en una repetición; se encola todo y luego se cancela
+        s.send(Cmd::Repeat { combo: "f2".into(), interval_ms: 20, secs: 120.0 });
+        wait_until(|| typed_usages(&link).contains(&0x3B));
+        for i in 0..10 {
+            s.send(Cmd::MouseAbs { x: 100 + i, y: 100 });
+        }
+        s.send(Cmd::MouseAbs { x: 1111, y: 2222 });
+        s.send(Cmd::Button { name: "left", down: true, rel: false });
+        s.send(Cmd::Button { name: "left", down: false, rel: false });
+        s.send(Cmd::Wheel { amount: 1, rel: false });
+        s.send(Cmd::MouseAbs { x: 3000, y: 3000 });
+        s.send(Cmd::SetOpts(TargetOs::Macos.opts()));
+        s.send(Cmd::MouseAbs { x: 3333, y: 4444 });
+        s.send(Cmd::Button { name: "left", down: true, rel: false });
+        s.send(Cmd::Button { name: "left", down: false, rel: false });
+        s.send(Cmd::Wheel { amount: -1, rel: false });
+        s.cancel_job();
+        wait_until(|| records(&link).iter().filter(|(o, p)| *o == BUTTONS_ABS && p == &[0]).count() >= 2);
+        // (la repetición suelta todo al acabar: RELEASE_ALL; los `[0]` de botones de esa suelta no cuentan como clic)
+        let recs: Vec<_> = records(&link).into_iter().filter(|(o, _)| [BUTTONS_ABS, BUTTONS_REL, MOUSE_ABS, MOUSE_REL].contains(o)).collect();
+        let pos = |want: (u8, &[u8])| recs.iter().position(|(o, p)| *o == want.0 && p.as_slice() == want.1).unwrap_or_else(|| panic!("falta {want:?} en {recs:?}"));
+        let xy = |i: usize| (u16::from_le_bytes([recs[i].1[0], recs[i].1[1]]), u16::from_le_bytes([recs[i].1[2], recs[i].1[3]]));
+        // primer clic por el relativo, precedido por su posición
+        let d1 = pos((BUTTONS_REL, &[1]));
+        let m1 = recs[..d1].iter().rposition(|(o, _)| *o == MOUSE_ABS).expect("movimiento antes del primer clic");
+        assert_eq!(xy(m1), (1111, 2222));
+        // segundo clic por el absoluto, después del primero, precedido por SU posición (no fusionada con 3000,3000)
+        let d2 = pos((BUTTONS_ABS, &[1]));
+        assert!(d2 > d1, "el orden del cambio no se respeta");
+        let m2 = recs[..d2].iter().rposition(|(o, _)| *o == MOUSE_ABS).unwrap();
+        assert_eq!(xy(m2), (3333, 4444));
+        assert!(!recs[d1 + 1..].iter().any(|(o, p)| *o == BUTTONS_REL && p == &[1]), "un clic tras el cambio salió por el relativo");
+        let st = sim.state();
+        assert_eq!((st.buttons_abs, st.buttons_rel), (0, 0));
+        assert_eq!(st.wheel_total, 0, "rueda: +1 por el relativo y -1 después");
+        assert!(recs[d1..d2].iter().any(|(o, p)| *o == MOUSE_REL && p.len() == 4 && p[2] == 1), "la primera rueda debía ir por el relativo");
+        assert!(recs[d2..].iter().any(|(o, p)| *o == MOUSE_ABS && p.len() == 6 && p[4] == 0xFF), "la segunda rueda debía ir por el absoluto");
+    }
+
+    /// Cambiar de camino con un botón mantenido lo suelta (por los dos informes) en vez de dejarlo pegado en el destino.
+    #[test]
+    fn set_opts_releases_held_buttons_on_both_paths() {
+        let (s, sim, _link) = sim_rig_opts(false);
+        s.send(Cmd::MouseAbs { x: 10, y: 10 });
+        s.send(Cmd::Button { name: "left", down: true, rel: false });
+        wait_until(|| sim.state().buttons_abs == 1);
+        s.send(Cmd::SetOpts(SessionOpts { abs_buttons_via_rel: true }));
+        wait_until(|| sim.state().buttons_abs == 0);
+        // el siguiente clic ya va por el relativo
+        s.send(Cmd::Button { name: "right", down: true, rel: false });
+        wait_until(|| sim.state().buttons_rel == 2);
+        assert_eq!(sim.state().buttons_abs, 0);
+        // cambiar a lo mismo no toca nada
+        s.send(Cmd::SetOpts(SessionOpts { abs_buttons_via_rel: true }));
+        s.send(Cmd::Key { usage: 0x04, down: true });
+        wait_until(|| sim.state().keys.contains(&4));
+        assert_eq!(sim.state().buttons_rel, 2);
+    }
+
+    /// Sin enlace la orden no se pierde: al conectar se usa el camino pedido.
+    #[test]
+    fn set_opts_while_disconnected_applies_on_connect() {
+        use crate::transport::ble::BleOptions;
+        let (t, sim, _link) = crate::transport::select::ble_sim(BleOptions::default());
+        let slot = Arc::new(Mutex::new(Some(t)));
+        let ready = Arc::new(AtomicBool::new(false));
+        let r2 = ready.clone();
+        let s = Session::spawn_with(
+            Box::new(move || {
+                if !r2.load(Ordering::Relaxed) {
+                    return Err(Error::DeviceNotFound("aún no".into()));
+                }
+                slot.lock().unwrap().take().map(|t| Box::new(t) as Box<dyn Transport>).ok_or(Error::DeviceNotFound("consumido".into()))
+            }),
+            "us",
+            None,
+            SessionOpts { abs_buttons_via_rel: true },
+        )
+        .unwrap();
+        s.send(Cmd::SetOpts(TargetOs::Macos.opts()));
+        std::thread::sleep(Duration::from_millis(50));
+        ready.store(true, Ordering::Relaxed);
+        wait_link(&s);
+        s.send(Cmd::Button { name: "left", down: true, rel: false });
+        wait_until(|| sim.state().buttons_abs == 1);
+        assert_eq!(sim.state().buttons_rel, 0);
     }
 }
