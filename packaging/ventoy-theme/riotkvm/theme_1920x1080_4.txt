@@ -1,5 +1,5 @@
 ventoy_left_top_color: "@80%@95%@#6E786E@"
-# Tema QKVM para Ventoy (GRUB2) 1920x1080. GENERADO por tools/gen_ventoy_theme.py: no editar a mano.
+# Tema RiotKVM para Ventoy (GRUB2) 1920x1080. GENERADO por tools/gen_ventoy_theme.py: no editar a mano.
 # Estetica de docs/DESIGN.md: fondo negro, verde fosforo, bordes de 1 px, sin redondeos ni degradados.
 desktop-image: "bg_1920x1080_4.png"
 desktop-color: "#000000"

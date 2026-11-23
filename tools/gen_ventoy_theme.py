@@ -1,7 +1,7 @@
-"""Genera el tema GRUB2 de Ventoy con la estetica QKVM (docs/DESIGN.md) en packaging/ventoy-theme/.
+"""Genera el tema GRUB2 de Ventoy con la estetica RiotKVM (docs/DESIGN.md) en packaging/ventoy-theme/.
 
 Salida (lo que dkvm-flash copia a /ventoy/theme/ de la particion exFAT):
-  qkvm/   theme_<WxH>_<n>.txt + bg_<WxH>_<n>.png (una por consigna del pie), pixmaps 9-slice de 1 px e icons/
+  riotkvm/   theme_<WxH>_<n>.txt + bg_<WxH>_<n>.png (una por consigna del pie), pixmaps 9-slice de 1 px e icons/
   fonts/  JetBrains Mono en .pf2 (solo con --fonts: necesita grub-mkfont) + OFL.txt
 
 Ventoy elige entre los theme_*.txt los que llevan la resolucion activa en la ruta ("resolution_fit": 1) y, entre
@@ -50,7 +50,7 @@ def skull_img():
 # --- iconos de clase de menu (8x8, 1 bit, escalado entero) ---
 ICONS = {
     # todo lo que hay en /Tools (menu_class "parent": "/Tools"): cruz de rescate
-    "qkvm-rescate": (AMBAR, ["...##...", "...##...", "...##...", "########", "########", "...##...", "...##...", "...##..."]),
+    "riotkvm-rescate": (AMBAR, ["...##...", "...##...", "...##...", "########", "########", "...##...", "...##...", "...##..."]),
 }
 
 def icon(rows, col, k):
@@ -108,17 +108,17 @@ def background(W, H, L, pie):
     sk = skull_img().resize((64 * k, 64 * k), Image.NEAREST)
     im.paste(sk, (m, t))
     x = m + 64 * k + 4 * 8
-    # "QKVM" con la tinta alineada arriba con la calavera y de la mitad de su alto
+    # "RiotKVM" con la tinta alineada arriba con la calavera y de la mitad de su alto
     hk = 64 * k // 2
     size = 8
     while True:
-        b = ttf(True, size + 1).getbbox("QKVM")
+        b = ttf(True, size + 1).getbbox("RiotKVM")
         if b[3] - b[1] > hk:
             break
         size += 1
     f = ttf(True, size)
-    b = f.getbbox("QKVM")
-    text1(d, (x - b[0], t + 4 - b[1]), "QKVM", f, VERDE)
+    b = f.getbbox("RiotKVM")
+    text1(d, (x - b[0], t + 4 - b[1]), "RiotKVM", f, VERDE)
     fs = ttf(False, L["sub"])
     sb = fs.getbbox("Mg")
     line = int((sb[3] - sb[1]) * 1.6)
@@ -146,7 +146,7 @@ def theme_txt(W, H, L):
     # azul #0000ff a la izquierda y pisa la linea de atajos). Gris de la paleta: a 1920 abajo a la derecha; a 1024
     # la linea de atajos llega casi al borde, asi que arriba a la derecha.
     return f"""ventoy_left_top_color: "@{L["ver"]}@{GRIS}@"
-# Tema QKVM para Ventoy (GRUB2) {W}x{H}. GENERADO por tools/gen_ventoy_theme.py: no editar a mano.
+# Tema RiotKVM para Ventoy (GRUB2) {W}x{H}. GENERADO por tools/gen_ventoy_theme.py: no editar a mano.
 # Estetica de docs/DESIGN.md: fondo negro, verde fosforo, bordes de 1 px, sin redondeos ni degradados.
 desktop-image: "background.png"
 desktop-color: "{NEGRO}"
@@ -216,7 +216,7 @@ terminal-box: "terminal_box_*.png"
 """
 
 def gen_theme():
-    d = os.path.join(OUT, "qkvm")
+    d = os.path.join(OUT, "riotkvm")
     os.makedirs(os.path.join(d, "icons"), exist_ok=True)
     nine(d, "menu", VERDE, NEGRO)
     nine(d, "terminal_box", VERDE, NEGRO)
@@ -250,7 +250,7 @@ def gen_fonts():
 
 if __name__ == "__main__":
     import shutil
-    for old in ("qkvm", "qkvm_1920x1080", "qkvm_1024x768"):
+    for old in ("riotkvm", "riotkvm_1920x1080", "riotkvm_1024x768"):
         shutil.rmtree(os.path.join(OUT, old), ignore_errors=True)
     gen_theme()
     if "--fonts" in sys.argv:

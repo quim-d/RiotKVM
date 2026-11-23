@@ -211,7 +211,14 @@ fn info_tab(ui: &mut egui::Ui, info: &Info) {
     ui.label(format!("soltar la captura: {}", hook::ESCAPE_HELP));
     ui.label(format!("pegar el portapapeles: {}", info.paste_chord));
     ui.separator();
-    ui.label(egui::RichText::new(format!("QKVM {} · {}", env!("CARGO_PKG_VERSION"), info.transport)).color(theme::GRIS));
+    ui.label(egui::RichText::new(format!("RiotKVM {} · {}", env!("CARGO_PKG_VERSION"), info.transport)).color(theme::GRIS));
+    repo_link(ui);
+}
+
+/// Enlace al repositorio (código, releases e incidencias).
+pub fn repo_link(ui: &mut egui::Ui) {
+    let url = format!("https://github.com/{}", dkvm_flash::release::REPO);
+    ui.hyperlink_to(format!("github.com/{}", dkvm_flash::release::REPO), &url).on_hover_text(url);
 }
 
 #[cfg(test)]

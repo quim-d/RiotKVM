@@ -21,7 +21,7 @@ fn main() {
     println!("cargo:rerun-if-changed={}", theme.display());
     let mut files = Vec::new();
     walk(&theme, &mut files);
-    let mut src = String::from("/// Ficheros del tema QKVM: (ruta dentro de /ventoy/theme/, contenido).\npub static FILES: &[(&str, &[u8])] = &[\n");
+    let mut src = String::from("/// Ficheros del tema RiotKVM: (ruta dentro de /ventoy/theme/, contenido).\npub static FILES: &[(&str, &[u8])] = &[\n");
     for f in &files {
         println!("cargo:rerun-if-changed={}", f.display());
         let rel = f.strip_prefix(&theme).unwrap().to_string_lossy().replace('\\', "/");

@@ -313,10 +313,10 @@ QKVM se caía al arrancar en macOS: nokhwa abría la cámara para listar modos, 
 ## 3l. v0.2.3: captura propia en macOS (MS2109)
 En macOS el vídeo ya no pasa por `Camera` de nokhwa (`dkvm-video/src/mac.rs`): se elige (formato, rango de fps) por cercanía a lo pedido (`macsel.rs`: 30 -> 30.00003, 60 -> 60.00024), se aplica la duración exacta del propio rango, no se pide MJPEG (la MS2109 solo da NV12/YUYV en AVFoundation) y la salida se pide en BGRA. Si un formato falla se prueba el siguiente; todo error es un mensaje. Sin verificar en Mac real (ver `docs/handoff/gui-dev.md`).
 
-## 3m. microSD: tema QKVM de Ventoy
+## 3m. microSD: tema RiotKVM de Ventoy
 
 - `dkvm sd ventoy --disk diskN` (y la GUI, Tools → microSD) escribe Ventoy y, dentro del exFAT, `/ventoy/ventoy.json`,
-  el tema QKVM y la carpeta vacía `/Tools` (lo crea `dkvm-flash/src/exfat.rs`: clústeres contiguos con su cadena
+  el tema RiotKVM y la carpeta vacía `/Tools` (lo crea `dkvm-flash/src/exfat.rs`: clústeres contiguos con su cadena
   FAT, bitmap y checksums; comprobado con `fsck.exfat` y montándolo en macOS). `--no-theme` (casilla en la GUI)
   deja el tema de Ventoy. No se descarga ni se copia ninguna ISO: cada uno pone las suyas, instaladores en la
   raíz y herramientas en `/Tools`.
@@ -325,7 +325,7 @@ En macOS el vídeo ya no pasa por `Camera` de nokhwa (`dkvm-video/src/mac.rs`): 
   deja macOS en exFAT) y el tema. Sin `VTOY_DEFAULT_SEARCH_ROOT` (escondería la raíz).
 - Tema: `packaging/ventoy-theme/` (lo genera `tools/gen_ventoy_theme.py`, ver su README). Maquetas a 1920x1080 y
   1024x768 (`resolution_fit`), cita del pie que rota en cada arranque y la versión de Ventoy en gris colocada por
-  el propio theme.txt. Arranca igual en BIOS legacy y UEFI: `docs/ui/ventoy_qkvm_*.png` son capturas de QEMU con
+  el propio theme.txt. Arranca igual en BIOS legacy y UEFI: `docs/ui/ventoy_riotkvm_*.png` son capturas de QEMU con
   SeaBIOS y OVMF.
 - memtest86+ 9.00 en BIOS legacy no arranca en el modo normal de Ventoy (vuelve a la BIOS): elegir «Arrancar en
   modo memdisk» en el submenú (en UEFI va en modo normal).

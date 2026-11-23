@@ -640,7 +640,7 @@ mod tests {
         let long = "un nombre de fichero bastante largo con acentos áéí.txt";
         let files = [
             NewFile { path: "ventoy/ventoy.json", data: b"{}" },
-            NewFile { path: "ventoy/theme/qkvm_1920x1080/background.png", data: &big },
+            NewFile { path: "ventoy/theme/riotkvm_1920x1080/background.png", data: &big },
             NewFile { path: "ventoy/theme/fonts/OFL.txt", data: b"ofl" },
             NewFile { path: long, data: b"x" },
             NewFile { path: "vacio.txt", data: b"" },
@@ -649,7 +649,7 @@ mod tests {
         let g = format_with_files(&mut d, 2048 * 512, sectors, 64, "Ventoy", 1, &files, Timestamp::from_ymd_hms(2026, 11, 23, 12, 0, 0)).unwrap();
         let got = read_files(&mut d, 2048 * 512).unwrap();
         let mut want: Vec<(String, Vec<u8>)> = files.iter().map(|f| (f.path.to_string(), f.data.to_vec())).collect();
-        for dir in ["ventoy/", "ventoy/theme/", "ventoy/theme/qkvm_1920x1080/", "ventoy/theme/fonts/"] {
+        for dir in ["ventoy/", "ventoy/theme/", "ventoy/theme/riotkvm_1920x1080/", "ventoy/theme/fonts/"] {
             want.push((dir.to_string(), vec![]));
         }
         want.sort();
