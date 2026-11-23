@@ -1,9 +1,10 @@
 //! Firmware publicado en la última release de GitHub.
 //!
-//! El CI (`.github/workflows/release.yml`) publica en cada release `qkvm-fw-X.Y.Z.factory.bin`, `SHA256SUMS.txt` y
+//! El CI (`.github/workflows/release.yml`) publica en cada release `riotkvm-fw-X.Y.Z.factory.bin`, `SHA256SUMS.txt` y
 //! `manifest.json` (`{schema:1, tag, client:{version}, firmware:{version, proto, asset, sha256, size, url}}`).
-//! Orden de preferencia: manifest → asset `qkvm-fw-*.factory.bin` + `SHA256SUMS.txt` → mismo asset + `digest` de la
-//! API de GitHub. Releases antiguas (≤ v0.2.1) no traen firmware: se informa sin error.
+//! Orden de preferencia: manifest → asset `riotkvm-fw-*.factory.bin` + `SHA256SUMS.txt` → mismo asset + `digest` de la
+//! API de GitHub. Releases antiguas (≤ v0.2.1) no traen firmware: se informa sin error. También se acepta el nombre
+//! de asset anterior al cambio de nombre del proyecto (`qkvm-fw-*`), por si una release lo trae.
 
 use crate::{http, Cancel, Error, Reporter, Result};
 use riotkvm_core::FwVersion;
@@ -14,7 +15,8 @@ pub const REPO: &str = "quim-d/RiotKVM";
 pub const LATEST_API: &str = "https://api.github.com/repos/quim-d/RiotKVM/releases/latest";
 /// Tope de tamaño del factory.bin (la flash del T-Dongle-S3 es de 16 MB).
 pub const MAX_FW_BYTES: u64 = 16 << 20;
-const ASSET_PREFIX: &str = "qkvm-fw-";
+/// Prefijos del asset de firmware: el actual y el anterior (`qkvm-fw-`, antes de llamarse RiotKVM).
+const ASSET_PREFIXES: [&str; 2] = ["riotkvm-fw-", "qkvm-fw-"];
 const ASSET_SUFFIX: &str = ".factory.bin";
 
 #[derive(Debug, Clone, Deserialize)]
@@ -97,9 +99,10 @@ pub fn parse_sha256sums(text: &str) -> Vec<(String, String)> {
         .collect()
 }
 
-/// `qkvm-fw-1.2.3.factory.bin` -> 1.2.3.
+/// `riotkvm-fw-1.2.3.factory.bin` (o el antiguo `qkvm-fw-1.2.3.factory.bin`) -> 1.2.3.
 pub fn version_from_asset_name(name: &str) -> Option<FwVersion> {
-    name.strip_prefix(ASSET_PREFIX)?.strip_suffix(ASSET_SUFFIX)?.parse().ok()
+    let rest = ASSET_PREFIXES.iter().find_map(|p| name.strip_prefix(p))?;
+    rest.strip_suffix(ASSET_SUFFIX)?.parse().ok()
 }
 
 /// El asset de firmware de la release (si hubiera varios, el de versión más alta).
@@ -149,7 +152,7 @@ pub fn resolve(rel: &GhRelease, fetch: &dyn Fn(&str) -> Result<String>) -> Resul
         }));
     }
     let Some((asset, version)) = select_firmware_asset(&rel.assets) else {
-        return none(format!("la release {tag} no trae firmware (ni manifest.json ni qkvm-fw-*.factory.bin)"));
+        return none(format!("la release {tag} no trae firmware (ni manifest.json ni riotkvm-fw-*.factory.bin)"));
     };
     let offer = |sha256: String, src| {
         Ok(Availability::Offer(FirmwareOffer {
@@ -264,18 +267,21 @@ mod tests {
 
     #[test]
     fn sums_parse_both_formats() {
-        let t = format!("{H1}  qkvm-fw-1.1.0.factory.bin\n{H2} *manifest.json\nbasura\n\n{}  corto\n", &H1[..10]);
+        let t = format!("{H1}  riotkvm-fw-1.1.0.factory.bin\n{H2} *manifest.json\nbasura\n\n{}  corto\n", &H1[..10]);
         let s = parse_sha256sums(&t);
-        assert_eq!(s, vec![("qkvm-fw-1.1.0.factory.bin".into(), H1.into()), ("manifest.json".into(), H2.into())]);
+        assert_eq!(s, vec![("riotkvm-fw-1.1.0.factory.bin".into(), H1.into()), ("manifest.json".into(), H2.into())]);
     }
 
     #[test]
     fn asset_names() {
-        assert_eq!(version_from_asset_name("qkvm-fw-1.1.0.factory.bin"), Some(FwVersion::new(1, 1, 0)));
-        assert_eq!(version_from_asset_name("qkvm-fw-1.1.factory.bin"), Some(FwVersion::new(1, 1, 0)));
-        assert_eq!(version_from_asset_name("qkvm-fw-x.factory.bin"), None);
-        assert_eq!(version_from_asset_name("riotkvm-0.2.1-linux-x86_64.tar.gz"), None);
-        let a = [asset("qkvm-fw-1.1.0.factory.bin", None), asset("qkvm-fw-1.10.0.factory.bin", None), asset("qkvm-fw-1.9.0.factory.bin", None), asset("SHA256SUMS.txt", None)];
+        assert_eq!(version_from_asset_name("riotkvm-fw-1.1.0.factory.bin"), Some(FwVersion::new(1, 1, 0)));
+        assert_eq!(version_from_asset_name("riotkvm-fw-1.1.factory.bin"), Some(FwVersion::new(1, 1, 0)));
+        assert_eq!(version_from_asset_name("riotkvm-fw-x.factory.bin"), None);
+        // nombre anterior al cambio de nombre del proyecto
+        assert_eq!(version_from_asset_name("qkvm-fw-1.0.2.factory.bin"), Some(FwVersion::new(1, 0, 2)));
+        assert_eq!(version_from_asset_name("otro-fw-1.0.2.factory.bin"), None);
+        assert_eq!(version_from_asset_name("quim-dkvm-0.2.1-linux-x86_64.tar.gz"), None);
+        let a = [asset("riotkvm-fw-1.1.0.factory.bin", None), asset("riotkvm-fw-1.10.0.factory.bin", None), asset("riotkvm-fw-1.9.0.factory.bin", None), asset("SHA256SUMS.txt", None)];
         assert_eq!(select_firmware_asset(&a).unwrap().1, FwVersion::new(1, 10, 0));
         assert!(select_firmware_asset(&a[3..]).is_none());
     }
@@ -283,7 +289,7 @@ mod tests {
     #[test]
     fn old_release_without_firmware() {
         // como v0.2.1: paquetes del cliente y SHA256SUMS, sin firmware ni manifest
-        let rel = GhRelease { tag_name: "v0.2.1".into(), html_url: String::new(), assets: vec![asset("riotkvm-0.2.1-macos-arm64.dmg", Some(&format!("sha256:{H1}"))), asset("SHA256SUMS.txt", None)] };
+        let rel = GhRelease { tag_name: "v0.2.1".into(), html_url: String::new(), assets: vec![asset("quim-dkvm-0.2.1-macos-arm64.dmg", Some(&format!("sha256:{H1}"))), asset("SHA256SUMS.txt", None)] };
         match resolve(&rel, &fetcher(HashMap::new())).unwrap() {
             Availability::None { tag, reason } => {
                 assert_eq!(tag, "v0.2.1");
@@ -296,41 +302,41 @@ mod tests {
     #[test]
     fn manifest_wins() {
         let man = format!(
-            r#"{{"schema":1,"tag":"v0.3.0","client":{{"version":"0.3.0"}},"firmware":{{"version":"1.1.0","proto":1,"asset":"qkvm-fw-1.1.0.factory.bin","sha256":"{}","size":1234,"url":"https://github.com/x/y"}}}}"#,
+            r#"{{"schema":1,"tag":"v0.3.0","client":{{"version":"0.3.0"}},"firmware":{{"version":"1.1.0","proto":1,"asset":"riotkvm-fw-1.1.0.factory.bin","sha256":"{}","size":1234,"url":"https://github.com/x/y"}}}}"#,
             H1.to_uppercase()
         );
-        let rel = GhRelease { tag_name: "v0.3.0".into(), html_url: String::new(), assets: vec![asset("qkvm-fw-1.1.0.factory.bin", None), asset("manifest.json", None), asset("SHA256SUMS.txt", None)] };
+        let rel = GhRelease { tag_name: "v0.3.0".into(), html_url: String::new(), assets: vec![asset("riotkvm-fw-1.1.0.factory.bin", None), asset("manifest.json", None), asset("SHA256SUMS.txt", None)] };
         let f = fetcher(HashMap::from([("manifest.json".to_string(), man)]));
         let Availability::Offer(o) = resolve(&rel, &f).unwrap() else { panic!() };
         assert_eq!(o.version, FwVersion::new(1, 1, 0));
         assert_eq!(o.proto, Some(1));
         assert_eq!(o.sha256, H1);
         assert_eq!(o.sha_source, ShaSource::Manifest);
-        assert!(o.url.ends_with("/qkvm-fw-1.1.0.factory.bin"), "usa la URL del asset listado: {}", o.url);
+        assert!(o.url.ends_with("/riotkvm-fw-1.1.0.factory.bin"), "usa la URL del asset listado: {}", o.url);
     }
 
     #[test]
     fn manifest_inconsistent_or_newer_schema() {
-        let bad = format!(r#"{{"schema":1,"tag":"v","firmware":{{"version":"1.2.0","asset":"qkvm-fw-1.1.0.factory.bin","sha256":"{H1}"}}}}"#);
-        let rel = GhRelease { tag_name: "v".into(), html_url: String::new(), assets: vec![asset("qkvm-fw-1.1.0.factory.bin", None), asset("manifest.json", None)] };
+        let bad = format!(r#"{{"schema":1,"tag":"v","firmware":{{"version":"1.2.0","asset":"riotkvm-fw-1.1.0.factory.bin","sha256":"{H1}"}}}}"#);
+        let rel = GhRelease { tag_name: "v".into(), html_url: String::new(), assets: vec![asset("riotkvm-fw-1.1.0.factory.bin", None), asset("manifest.json", None)] };
         assert!(resolve(&rel, &fetcher(HashMap::from([("manifest.json".to_string(), bad)]))).is_err());
-        let v2 = format!(r#"{{"schema":2,"tag":"v","firmware":{{"version":"1.1.0","asset":"qkvm-fw-1.1.0.factory.bin","sha256":"{H1}"}}}}"#);
+        let v2 = format!(r#"{{"schema":2,"tag":"v","firmware":{{"version":"1.1.0","asset":"riotkvm-fw-1.1.0.factory.bin","sha256":"{H1}"}}}}"#);
         assert!(matches!(resolve(&rel, &fetcher(HashMap::from([("manifest.json".to_string(), v2)]))).unwrap(), Availability::None { .. }));
-        let short = r#"{"schema":1,"tag":"v","firmware":{"version":"1.1.0","asset":"qkvm-fw-1.1.0.factory.bin","sha256":"abc"}}"#.to_string();
+        let short = r#"{"schema":1,"tag":"v","firmware":{"version":"1.1.0","asset":"riotkvm-fw-1.1.0.factory.bin","sha256":"abc"}}"#.to_string();
         assert!(resolve(&rel, &fetcher(HashMap::from([("manifest.json".to_string(), short)]))).is_err());
     }
 
     #[test]
     fn fallback_sums_then_digest() {
-        let rel = GhRelease { tag_name: "v0.3.0".into(), html_url: String::new(), assets: vec![asset("qkvm-fw-1.1.0.factory.bin", Some(&format!("sha256:{H2}"))), asset("SHA256SUMS.txt", None)] };
-        let sums = format!("{H1}  qkvm-fw-1.1.0.factory.bin\n");
+        let rel = GhRelease { tag_name: "v0.3.0".into(), html_url: String::new(), assets: vec![asset("riotkvm-fw-1.1.0.factory.bin", Some(&format!("sha256:{H2}"))), asset("SHA256SUMS.txt", None)] };
+        let sums = format!("{H1}  riotkvm-fw-1.1.0.factory.bin\n");
         let Availability::Offer(o) = resolve(&rel, &fetcher(HashMap::from([("SHA256SUMS.txt".to_string(), sums)]))).unwrap() else { panic!() };
         assert_eq!((o.sha256.as_str(), o.sha_source), (H1, ShaSource::Sha256Sums));
         // sumas sin la línea del firmware: digest de GitHub
         let Availability::Offer(o) = resolve(&rel, &fetcher(HashMap::from([("SHA256SUMS.txt".to_string(), String::new())]))).unwrap() else { panic!() };
         assert_eq!((o.sha256.as_str(), o.sha_source), (H2, ShaSource::GithubDigest));
         // sin nada: no se ofrece
-        let rel = GhRelease { tag_name: "v".into(), html_url: String::new(), assets: vec![asset("qkvm-fw-1.1.0.factory.bin", None)] };
+        let rel = GhRelease { tag_name: "v".into(), html_url: String::new(), assets: vec![asset("riotkvm-fw-1.1.0.factory.bin", None)] };
         assert!(matches!(resolve(&rel, &fetcher(HashMap::new())).unwrap(), Availability::None { .. }));
     }
 

@@ -19,7 +19,7 @@ extern "C" bool bleInUse(void) { return true; }
 namespace blelink {
 namespace {
 
-constexpr uint8_t PROTO_VER = QKVM_BLE_PROTO, FW_MAJOR = QKVM_FW_MAJOR, FW_MINOR = QKVM_FW_MINOR, FW_PATCH = QKVM_FW_PATCH;
+constexpr uint8_t PROTO_VER = RIOTKVM_BLE_PROTO, FW_MAJOR = RIOTKVM_FW_MAJOR, FW_MINOR = RIOTKVM_FW_MINOR, FW_PATCH = RIOTKVM_FW_PATCH;
 constexpr uint16_t NONE = 0xFFFF;
 constexpr size_t MAXW = 253;  // ATT_MTU preferido 256 - 3
 

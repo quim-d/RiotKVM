@@ -163,7 +163,7 @@ static void cmd(char* l, size_t len, int64_t evUs) {
   } else if (!strcmp(c, "info")) {
     const uint8_t* cd = tud_descriptor_configuration_cb(0);
     char bd[80]; blelink::diag(bd, sizeof bd);
-    replyf("fw=" QKVM_FW_VERSION " name=RiotKVM proto=" QKVM_STR(QKVM_BLE_PROTO) " mode=%c rst=%d crashes=%lu safe=%d ble_started=%d [%s] build=\"%s %s\" sd_mb=%lu boot_sd_ms=%lu boot_usb_ms=%lu sd_init_ms=%lu ui_t0=%lu ui_splash_ms=%lu ui_frame_us_max=%lu cfg_len=%u n_itf=%u",
+    replyf("fw=" RIOTKVM_FW_VERSION " name=RiotKVM proto=" RIOTKVM_STR(RIOTKVM_BLE_PROTO) " mode=%c rst=%d crashes=%lu safe=%d ble_started=%d [%s] build=\"%s %s\" sd_mb=%lu boot_sd_ms=%lu boot_usb_ms=%lu sd_init_ms=%lu ui_t0=%lu ui_splash_ms=%lu ui_frame_us_max=%lu cfg_len=%u n_itf=%u",
            kvmmode::letter(), (int)rstReason, (unsigned long)crashCount, safeMode ? 1 : 0, bleStarted ? 1 : 0, bd, __DATE__, __TIME__,
            (unsigned long)(sdmsc::sectors() / 2048), (unsigned long)bootSdMs, (unsigned long)bootUsbMs, (unsigned long)sdmsc::initMs(),
            (unsigned long)ui::firstFrameMs(), (unsigned long)ui::splashMs(), (unsigned long)ui::frameUsMax(),

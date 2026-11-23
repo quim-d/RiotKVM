@@ -50,23 +50,23 @@ jobs:
         run: cargo build --release --locked
 
       - name: Pruebas (sin hardware)
-        run: cargo test --release --locked -p dkvm-core -p dkvm-cli
+        run: cargo test --release --locked -p riotkvm-core -p riotkvm-cli
 
       - name: Autocompletado de shell
         run: |
           mkdir -p target/completions
-          target/release/dkvm completion bash > target/completions/dkvm.bash
-          target/release/dkvm completion zsh  > target/completions/_dkvm
-          target/release/dkvm completion fish > target/completions/dkvm.fish
+          target/release/riotkvm completion bash > target/completions/riotkvm.bash
+          target/release/riotkvm completion zsh > target/completions/_riotkvm
+          target/release/riotkvm completion fish > target/completions/riotkvm.fish
 
       - name: tar.gz genérico
         run: |
           V=${{ steps.ver.outputs.v }}
           D="riotkvm-$V-linux-x86_64"
           mkdir -p "../dist/$D"
-          cp target/release/dkvm target/release/dkvm-gui "../dist/$D/"
+          cp target/release/riotkvm target/release/riotkvm-gui "../dist/$D/"
           cp -r target/completions "../dist/$D/completions"
-          cp ../packaging/linux/dkvm-gui.desktop README.md "../dist/$D/"
+          cp ../packaging/linux/riotkvm-gui.desktop README.md "../dist/$D/"
           [ -f ../LICENSE ] && cp ../LICENSE "../dist/$D/" || true
           tar -C ../dist -czf "../dist/$D.tar.gz" "$D"
           rm -rf "../dist/$D"
@@ -74,12 +74,12 @@ jobs:
       - name: .deb (cargo-deb)
         run: |
           cargo install cargo-deb --locked
-          cargo deb -p dkvm-gui --no-build -o "../dist/riotkvm_${{ steps.ver.outputs.v }}_amd64.deb"
+          cargo deb -p riotkvm-gui --no-build -o "../dist/riotkvm_${{ steps.ver.outputs.v }}_amd64.deb"
 
       - name: .rpm (cargo-generate-rpm)
         run: |
           cargo install cargo-generate-rpm --locked
-          cargo generate-rpm -p dkvm-gui -o "../dist/riotkvm-${{ steps.ver.outputs.v }}-1.x86_64.rpm"
+          cargo generate-rpm -p riotkvm-gui -o "../dist/riotkvm-${{ steps.ver.outputs.v }}-1.x86_64.rpm"
 
       - name: Comprobar paquetes
         run: |
@@ -126,7 +126,7 @@ jobs:
           $V = "${{ steps.ver.outputs.v }}"
           $D = "riotkvm-$V-windows-x86_64"
           New-Item -ItemType Directory -Force "../dist/$D" | Out-Null
-          Copy-Item target/release/dkvm.exe, target/release/dkvm-gui.exe, target/release/vidbench.exe "../dist/$D/"
+          Copy-Item target/release/riotkvm.exe, target/release/riotkvm-gui.exe, target/release/vidbench.exe "../dist/$D/"
           Copy-Item README.md "../dist/$D/README.md"
           if (Test-Path ../LICENSE) { Copy-Item ../LICENSE "../dist/$D/LICENSE" }
           Compress-Archive -Path "../dist/$D" -DestinationPath "../dist/$D.zip"
@@ -175,7 +175,7 @@ jobs:
         run: cargo build --release --locked
 
       - name: Pruebas (sin hardware)
-        run: cargo test --release --locked -p dkvm-core -p dkvm-cli
+        run: cargo test --release --locked -p riotkvm-core -p riotkvm-cli
 
       - name: .app (firma ad-hoc) + .dmg + CLI
         working-directory: .
@@ -208,7 +208,7 @@ jobs:
       - name: Versión del firmware
         id: ver
         run: |
-          def() { sed -n "s/^#define QKVM_$1 \([0-9][0-9]*\)[[:space:]]*$/\1/p" src/version.h; }
+          def() { sed -n "s/^#define RIOTKVM_$1 \([0-9][0-9]*\)[[:space:]]*$/\1/p" src/version.h; }
           V="$(def FW_MAJOR).$(def FW_MINOR).$(def FW_PATCH)"
           P="$(def BLE_PROTO)"
           # =~ mira la cadena entera: un #define repetido (dos líneas) también falla
@@ -216,7 +216,7 @@ jobs:
             echo "::error::no se pudo leer la versión de src/version.h (fw=$V proto=$P)"; exit 1
           fi
           N="$V"; [ "$GITHUB_REF_TYPE" = "tag" ] || N="$V-dev"
-          { echo "v=$V"; echo "proto=$P"; echo "asset=qkvm-fw-$N.factory.bin"; } >> "$GITHUB_OUTPUT"
+          { echo "v=$V"; echo "proto=$P"; echo "asset=riotkvm-fw-$N.factory.bin"; } >> "$GITHUB_OUTPUT"
 
       - uses: actions/setup-python@v5
         with:
@@ -240,7 +240,7 @@ jobs:
       - name: Empaquetar
         run: |
           B=.pio/build/tdongle-s3/firmware.factory.bin
-          if ! grep -aqF "fw=${{ steps.ver.outputs.v }} name=QKVM proto=${{ steps.ver.outputs.proto }} " "$B"; then
+          if ! grep -aqF "fw=${{ steps.ver.outputs.v }} name=RiotKVM proto=${{ steps.ver.outputs.proto }} " "$B"; then
             echo "::error::el binario no contiene fw=${{ steps.ver.outputs.v }} proto=${{ steps.ver.outputs.proto }} (¿src/version.h con otro formato?)"; exit 1
           fi
           mkdir -p dist
