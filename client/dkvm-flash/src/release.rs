@@ -10,8 +10,8 @@ use dkvm_core::FwVersion;
 use serde::Deserialize;
 use std::path::PathBuf;
 
-pub const REPO: &str = "quim-d/quim-dkvm";
-pub const LATEST_API: &str = "https://api.github.com/repos/quim-d/quim-dkvm/releases/latest";
+pub const REPO: &str = "quim-d/RiotKVM";
+pub const LATEST_API: &str = "https://api.github.com/repos/quim-d/RiotKVM/releases/latest";
 /// Tope de tamaño del factory.bin (la flash del T-Dongle-S3 es de 16 MB).
 pub const MAX_FW_BYTES: u64 = 16 << 20;
 const ASSET_PREFIX: &str = "qkvm-fw-";

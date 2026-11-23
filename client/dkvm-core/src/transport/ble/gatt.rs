@@ -17,9 +17,9 @@ pub const EVT_UUID: &str = "7d0d1000-9b6e-4b7a-8d3f-2a5c6e1f0003";
 pub const INFO_UUID: &str = "7d0d1000-9b6e-4b7a-8d3f-2a5c6e1f0004";
 /// Nombre anunciado (solo informativo: se descubre por UUID de servicio, no por nombre).
 /// Nombre de anuncio actual (visible). El descubrimiento es por UUID de servicio, así que también se conecta a firmware
-/// antiguo que anuncia `QuimKVM` (ver `ADV_NAMES_ACCEPTED`).
-pub const ADV_NAME: &str = "QKVM";
-pub const ADV_NAMES_ACCEPTED: [&str; 2] = ["QKVM", "QuimKVM"];
+/// anterior que anuncia `QKVM` o `QuimKVM` (ver `ADV_NAMES_ACCEPTED`).
+pub const ADV_NAME: &str = "RiotKVM";
+pub const ADV_NAMES_ACCEPTED: [&str; 3] = ["RiotKVM", "QKVM", "QuimKVM"];
 
 /// Mensajes hacia el hilo del enlace (lo que escriben quien envía y los receptores del enlace).
 pub enum Inbox {

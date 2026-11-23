@@ -62,7 +62,7 @@ jobs:
       - name: tar.gz genérico
         run: |
           V=${{ steps.ver.outputs.v }}
-          D="quim-dkvm-$V-linux-x86_64"
+          D="riotkvm-$V-linux-x86_64"
           mkdir -p "../dist/$D"
           cp target/release/dkvm target/release/dkvm-gui "../dist/$D/"
           cp -r target/completions "../dist/$D/completions"
@@ -74,12 +74,12 @@ jobs:
       - name: .deb (cargo-deb)
         run: |
           cargo install cargo-deb --locked
-          cargo deb -p dkvm-gui --no-build -o "../dist/quim-dkvm_${{ steps.ver.outputs.v }}_amd64.deb"
+          cargo deb -p dkvm-gui --no-build -o "../dist/riotkvm_${{ steps.ver.outputs.v }}_amd64.deb"
 
       - name: .rpm (cargo-generate-rpm)
         run: |
           cargo install cargo-generate-rpm --locked
-          cargo generate-rpm -p dkvm-gui -o "../dist/quim-dkvm-${{ steps.ver.outputs.v }}-1.x86_64.rpm"
+          cargo generate-rpm -p dkvm-gui -o "../dist/riotkvm-${{ steps.ver.outputs.v }}-1.x86_64.rpm"
 
       - name: Comprobar paquetes
         run: |
@@ -124,7 +124,7 @@ jobs:
         shell: pwsh
         run: |
           $V = "${{ steps.ver.outputs.v }}"
-          $D = "quim-dkvm-$V-windows-x86_64"
+          $D = "riotkvm-$V-windows-x86_64"
           New-Item -ItemType Directory -Force "../dist/$D" | Out-Null
           Copy-Item target/release/dkvm.exe, target/release/dkvm-gui.exe, target/release/vidbench.exe "../dist/$D/"
           Copy-Item README.md "../dist/$D/README.md"
@@ -304,4 +304,4 @@ jobs:
           PRE=""
           case "$GITHUB_REF_NAME" in *-*) PRE="--prerelease";; esac
           gh release create "$GITHUB_REF_NAME" ./* --repo "$GITHUB_REPOSITORY" \
-            --title "quim-dkvm $GITHUB_REF_NAME" --generate-notes --verify-tag $PRE
+            --title "RiotKVM $GITHUB_REF_NAME" --generate-notes --verify-tag $PRE

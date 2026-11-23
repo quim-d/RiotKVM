@@ -278,7 +278,7 @@ void advStart() {
     struct os_mbuf* d = os_msys_get_pkthdr(0, 0);
     if (!d || ble_hs_adv_set_fields_mbuf(&f, d) != 0 || (dAdv = ble_gap_ext_adv_set_data(0, d)) != 0) return;
     struct ble_hs_adv_fields r = {};
-    static const char name[] = "QKVM";
+    static const char name[] = "RiotKVM";
     r.name = (const uint8_t*)name; r.name_len = sizeof(name) - 1; r.name_is_complete = 1;
     struct os_mbuf* m = os_msys_get_pkthdr(0, 0);
     if (!m || ble_hs_adv_set_fields_mbuf(&r, m) != 0 || (dAdv = ble_gap_ext_adv_rsp_set_data(0, m)) != 0) return;
@@ -323,7 +323,7 @@ static void beginImpl() {
   ble_hs_cfg.sm_io_cap = BLE_HS_IO_NO_INPUT_OUTPUT;  // Just Works
   ble_hs_cfg.sm_bonding = 0; ble_hs_cfg.sm_mitm = 0; ble_hs_cfg.sm_sc = 0;
   ble_svc_gap_init(); ble_svc_gatt_init();
-  ble_svc_gap_device_name_set("QKVM");
+  ble_svc_gap_device_name_set("RiotKVM");
   rtcStage = 3;
   ble_att_set_preferred_mtu(247);
   dCount = ble_gatts_count_cfg(svcs);

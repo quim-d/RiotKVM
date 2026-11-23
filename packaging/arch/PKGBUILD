@@ -1,28 +1,30 @@
-# Maintainer: quim-dkvm <noreply@users.noreply.github.com>
-_owner=OWNER   # <- usuario u organización de GitHub del repo
+# Maintainer: RiotKVM <noreply@users.noreply.github.com>
+_owner=quim-d   # usuario u organización de GitHub del repo
 # Compila desde la fuente de la release de GitHub. Antes de usarlo: ajusta _owner (usuario/organización del repo) y
 # ejecuta `updpkgsums` para rellenar el sha256 del tarball (o usa `makepkg -g >> PKGBUILD`).
-pkgname=quim-dkvm
+pkgname=riotkvm
+conflicts=('quim-dkvm')
+replaces=('quim-dkvm')
 pkgver=0.2.0
 pkgrel=1
 pkgdesc='RiotKVM: KVM de bolsillo (CLI dkvm y GUI dkvm-gui) para el dongle ESP32-S3'
 arch=('x86_64' 'aarch64')
-url="https://github.com/${_owner}/quim-dkvm"
+url="https://github.com/${_owner}/RiotKVM"
 license=('custom')   # sin LICENSE definida todavía: cambia por la elegida
 depends=('dbus' 'libxkbcommon' 'wayland' 'libx11' 'libglvnd' 'vulkan-icd-loader' 'bluez' 'gcc-libs')
 optdepends=('v4l-utils: diagnóstico de capturadoras UVC'
             'bluez-utils: bluetoothctl para emparejar/depurar BLE')
 makedepends=('cargo' 'pkgconf' 'nasm' 'cmake' 'gcc' 'clang')
-source=("$pkgname-$pkgver.tar.gz::https://github.com/${_owner}/quim-dkvm/archive/refs/tags/v$pkgver.tar.gz")
+source=("$pkgname-$pkgver.tar.gz::https://github.com/${_owner}/RiotKVM/archive/refs/tags/v$pkgver.tar.gz")
 sha256sums=('SKIP')   # `updpkgsums` lo sustituye
 
 prepare() {
-  cd "$srcdir/quim-dkvm-$pkgver/client"
+  cd "$srcdir/RiotKVM-$pkgver/client"
   cargo fetch --locked --target "$(rustc -vV | sed -n 's/host: //p')"
 }
 
 build() {
-  cd "$srcdir/quim-dkvm-$pkgver/client"
+  cd "$srcdir/RiotKVM-$pkgver/client"
   export RUSTUP_TOOLCHAIN=stable
   export CARGO_TARGET_DIR=target
   cargo build --release --frozen -p dkvm-cli -p dkvm-gui
@@ -33,13 +35,13 @@ build() {
 }
 
 check() {
-  cd "$srcdir/quim-dkvm-$pkgver/client"
+  cd "$srcdir/RiotKVM-$pkgver/client"
   export RUSTUP_TOOLCHAIN=stable
   cargo test --release --frozen -p dkvm-core -p dkvm-cli
 }
 
 package() {
-  cd "$srcdir/quim-dkvm-$pkgver"
+  cd "$srcdir/RiotKVM-$pkgver"
   install -Dm755 client/target/release/dkvm     "$pkgdir/usr/bin/dkvm"
   install -Dm755 client/target/release/dkvm-gui "$pkgdir/usr/bin/dkvm-gui"
   install -Dm644 client/target/completions/dkvm.bash "$pkgdir/usr/share/bash-completion/completions/dkvm"

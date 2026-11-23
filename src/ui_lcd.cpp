@@ -126,8 +126,8 @@ void splashV1(uint32_t t) {
   skullRows(4, 8, rows, gl, fr);
   if (t < 380) FR(0, 8 + rows, SW, 1, C_GREEN);
   if (t >= 380) eyes(4, 8, t < 700 ? C_GREEN : C_MAG, (t >= 760 && t < 820) || (t >= 980 && t < 1040));
-  if (t >= 300 && t < 800 && hsh(fr, 7) % 100 < 30) { typed("QKVM", 74, 8, t, 300, 60, C_MAG, 3); typed("QKVM", 78, 8, t, 300, 60, C_CYAN, 3); }
-  typed("QKVM", 76, 8, t, 300, 60, C_GREEN, 3);
+  if (t >= 300 && t < 800 && hsh(fr, 7) % 100 < 30) { typed("RiotKVM", 75, 12, t, 300, 45, C_MAG, 2); typed("RiotKVM", 77, 12, t, 300, 45, C_CYAN, 2); }
+  typed("RiotKVM", 76, 12, t, 300, 45, C_GREEN, 2);   // 7 letras a tamano 2: 84 px, justo hasta el borde
   const char* ln[4]; int n = bootLines(ln); if (n > 3) n = 3;
   for (int i = 0; i < n; i++) typed(ln[i], 76, 36 + 10 * i, t, 640 + 140 * i, 20, C_GREEN);
   char m[12]; snprintf(m, sizeof m, "mode %c", kvmmode::letter()); typed(m, 76, 68, t, 1050, 30, C_AMBER);
@@ -140,7 +140,7 @@ void splashV2(uint32_t t) {
   int lvl = t < 450 ? 0 : (int)((t - 450) / 25); if (lvl > 16) lvl = 16;
   if (lvl) skullDither(90, 8, lvl);
   if (t >= 850) eyes(90, 8, t < 1050 ? C_CYAN : C_MAG, t >= 1000 && t < 1060);
-  typed("QKVM", 3, 62, t, 900, 40, C_AMBER, 2);
+  typed("RiotKVM", 3, 62, t, 900, 25, C_AMBER, 2);
 }
 void splashV3(uint32_t t) {
   uint32_t fr = t / 40;
@@ -149,7 +149,7 @@ void splashV3(uint32_t t) {
   skullRows(ox, 8, 64, 0, 0);
   if (half < 32) { FR(0, 0, ox + 32 - half, SH, TFT_BLACK); FR(ox + 32 + half, 0, SW, SH, TFT_BLACK); }
   if (t >= 320) eyes(ox, 8, t < 400 ? C_WHITE : t < 600 ? C_GREEN : t < 800 ? C_CYAN : C_MAG, t >= 880 && t < 940);
-  typed("QKVM", 76, 14, t, 860, 35, C_GREEN, 3); typed("ready_", 76, 44, t, 1000, 30, C_AMBER);
+  typed("RiotKVM", 76, 18, t, 860, 20, C_GREEN, 2); typed("ready_", 76, 44, t, 1000, 30, C_AMBER);
   if (t >= 700 && t < 900 && hsh(fr, 3) % 100 < 40) FR(76, 14 + (int)(hsh(fr, 5) % 24), 74, 1, C_DGREEN);
 }
 
@@ -181,7 +181,7 @@ void composeStatus() {
   uint8_t m = shownMode; uint16_t ac = accent(m); const Layout& L = LAYOUT[m];
   spr.fillScreen(TFT_BLACK);
   FR(0, 0, SW, 11, ac);
-  char h[16]; snprintf(h, sizeof h, "%c %s", "ABC"[m], modeName(m)); TX(2, 2, h, TFT_BLACK); TX(SW - 2 - 24, 2, "QKVM", TFT_BLACK);
+  char h[16]; snprintf(h, sizeof h, "%c %s", "ABC"[m], modeName(m)); TX(2, 2, h, TFT_BLACK); TX(SW - 2 - 42, 2, "RiotKVM", TFT_BLACK);
   BM(4, 20, iconOf(m), uiasset::ICON_W, uiasset::ICON_H, ac);
   TX(4, 64, subOf(m), ac);
   for (int i = 0; i < L.n; i++) rowText(L.top[i] + 2, L.type[i]);

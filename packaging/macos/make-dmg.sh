@@ -30,10 +30,10 @@ RiotKVM sin Developer ID: macOS mostrará "no se puede abrir porque no se puede 
 TXT
 [ -f "$REPO/LICENSE" ] && cp "$REPO/LICENSE" "$STAGE/LICENSE"
 
-DMG="$OUT/quim-dkvm-$VERSION-macos-$ARCH.dmg"
+DMG="$OUT/riotkvm-$VERSION-macos-$ARCH.dmg"
 hdiutil create -volname "RiotKVM $VERSION" -srcfolder "$STAGE" -ov -format UDZO "$DMG"
 
 # CLI suelto
-CLI="$OUT/quim-dkvm-cli-$VERSION-macos-$ARCH.tar.gz"
+CLI="$OUT/riotkvm-cli-$VERSION-macos-$ARCH.tar.gz"
 tar -C "$STAGE" -czf "$CLI" dkvm README.md $( [ -f "$STAGE/LICENSE" ] && echo LICENSE )
 echo "$DMG"; echo "$CLI"

@@ -130,7 +130,7 @@ bool onStartStop(uint8_t, bool, bool) { return true; }  // sin trazas: corre en 
 
 bool begin() {
   msc = new USBMSC();  // registra la interfaz MSC (antes que HID, como en el firmware anterior)
-  msc->vendorID("QKVM"); msc->productID("SD Ventoy"); msc->productRevision("1.0");
+  msc->vendorID("RiotKVM"); msc->productID("SD Ventoy"); msc->productRevision("1.0");
   msc->onRead(onRead); msc->onWrite(onWrite); msc->onStartStop(onStartStop);
   msc->isWritable(true);
   msc->mediaPresent(false);
