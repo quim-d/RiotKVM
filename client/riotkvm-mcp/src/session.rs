@@ -13,7 +13,7 @@ use riotkvm_video::{Latest, Mode, Source};
 use image::{imageops::FilterType, RgbaImage};
 use serde_json::{json, Map, Value};
 use std::fs::File;
-use std::io::{Cursor, Read, Seek, Write};
+use std::io::Cursor;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
@@ -59,20 +59,23 @@ pub fn lock_path() -> PathBuf {
     std::env::temp_dir().join("riotkvm-mcp.lock")
 }
 
+fn pid_path(lock: &Path) -> std::path::PathBuf {
+    let mut p = lock.as_os_str().to_owned();
+    p.push(".pid");
+    p.into()
+}
+
 /// Toma el bloqueo (sin esperar). Mientras viva el `File`, ninguna otra instancia puede tenerlo.
 pub fn acquire_lock(path: &Path) -> Result<File, String> {
-    let mut f = std::fs::OpenOptions::new().read(true).write(true).create(true).truncate(false).open(path).map_err(|e| format!("[bloqueo] no se pudo abrir {}: {e}", path.display()))?;
+    let f = std::fs::OpenOptions::new().read(true).write(true).create(true).truncate(false).open(path).map_err(|e| format!("[bloqueo] no se pudo abrir {}: {e}", path.display()))?;
     match f.try_lock() {
         Ok(()) => {
-            let _ = f.set_len(0);
-            let _ = f.rewind();
-            let _ = write!(f, "{}", std::process::id());
-            let _ = f.flush();
+            // el pid va en un fichero aparte: en Windows el bloqueo impide leer el fichero bloqueado desde otro handle
+            let _ = std::fs::write(pid_path(path), std::process::id().to_string());
             Ok(f)
         }
         Err(std::fs::TryLockError::WouldBlock) => {
-            let mut pid = String::new();
-            let _ = f.read_to_string(&mut pid);
+            let pid = std::fs::read_to_string(pid_path(path)).unwrap_or_default();
             let pid = pid.trim();
             let who = if pid.is_empty() { String::new() } else { format!(" (pid {pid})") };
             Err(format!(

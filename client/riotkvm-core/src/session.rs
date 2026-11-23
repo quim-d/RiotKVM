@@ -1237,6 +1237,8 @@ mod tests {
         s.send(Cmd::Wheel { amount: -1, rel: false });
         s.cancel_job();
         wait_until(|| records(&link).iter().filter(|(o, p)| *o == BUTTONS_ABS && p == &[0]).count() >= 2);
+        // la última orden (rueda -1 por el absoluto) también tiene que haber llegado antes de mirar el estado
+        wait_until(|| records(&link).iter().any(|(o, p)| *o == MOUSE_ABS && p.len() == 6 && p[4] == 0xFF));
         // (la repetición suelta todo al acabar: RELEASE_ALL; los `[0]` de botones de esa suelta no cuentan como clic)
         let recs: Vec<_> = records(&link).into_iter().filter(|(o, _)| [BUTTONS_ABS, BUTTONS_REL, MOUSE_ABS, MOUSE_REL].contains(o)).collect();
         let pos = |want: (u8, &[u8])| recs.iter().position(|(o, p)| *o == want.0 && p.as_slice() == want.1).unwrap_or_else(|| panic!("falta {want:?} en {recs:?}"));

@@ -248,6 +248,9 @@ fn bloqueo_una_sola_instancia() {
     drop(a);
     let _b = session::acquire_lock(&p).unwrap();
     let _ = std::fs::remove_file(&p);
+    let mut pid = p.into_os_string();
+    pid.push(".pid");
+    let _ = std::fs::remove_file(pid);
 }
 
 // ---------- JSON-RPC ----------
