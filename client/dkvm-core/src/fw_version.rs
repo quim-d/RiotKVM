@@ -47,18 +47,14 @@ impl FromStr for FwVersion {
     type Err = String;
 
     fn from_str(s: &str) -> Result<FwVersion, String> {
+        let bad = || format!("versión no válida: {s}");
         let t = s.trim();
-        let body = t.strip_prefix('v').unwrap_or(t);
-        let parts: Vec<&str> = body.split('.').collect();
+        let parts: Vec<&str> = t.strip_prefix('v').unwrap_or(t).split('.').collect();
         if !(2..=3).contains(&parts.len()) {
-            return Err(format!("versión no válida: {s}"));
+            return Err(bad());
         }
-        let n = |p: &str| -> Result<u32, String> {
-            if p.is_empty() || !p.bytes().all(|c| c.is_ascii_digit()) {
-                return Err(format!("versión no válida: {s}"));
-            }
-            p.parse().map_err(|_| format!("versión no válida: {s}"))
-        };
+        // solo dígitos: u32::from_str aceptaría `+1`
+        let n = |p: &str| if p.bytes().all(|c| c.is_ascii_digit()) { p.parse::<u32>().map_err(|_| bad()) } else { Err(bad()) };
         Ok(FwVersion::new(n(parts[0])?, n(parts[1])?, if parts.len() == 3 { n(parts[2])? } else { 0 }))
     }
 }
@@ -74,7 +70,8 @@ mod tests {
         assert_eq!(v.to_string(), "1.2.3");
         assert_eq!("v1.0.0".parse::<FwVersion>().unwrap(), FwVersion::new(1, 0, 0));
         assert_eq!("1.0".parse::<FwVersion>().unwrap(), FwVersion::new(1, 0, 0));
-        for bad in ["etapa2", "mock", "1", "1.2.3.4", "1..2", "1.2.x", "1.2.3-rc1", ""] {
+        assert_eq!(" v4.5.6\n".parse::<FwVersion>().unwrap(), FwVersion::new(4, 5, 6));
+        for bad in ["etapa2", "mock", "1", "1.2.3.4", "1..2", "1.2.x", "1.2.3-rc1", "", "v", "+1.2.3", "1.-2.3", "99999999999.0.0"] {
             assert!(bad.parse::<FwVersion>().is_err(), "{bad}");
         }
         assert!(FwVersion::new(1, 0, 10) > FwVersion::new(1, 0, 9));
