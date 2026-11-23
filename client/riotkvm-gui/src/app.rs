@@ -949,19 +949,6 @@ impl eframe::App for App {
                     }
                 });
                 // ---- Teclado (distribución del servidor)
-                ui.menu_button(format!("Teclado: {}", self.layout), |ui| {
-                    ui.label(egui::RichText::new("distribución del servidor").color(theme::GRIS));
-                    let mut pick_layout: Option<&'static str> = None;
-                    for n in riotkvm_core::layouts::LAYOUT_NAMES {
-                        if ui.selectable_label(self.layout == n, riotkvm_core::layouts::layout_label(n)).clicked() {
-                            pick_layout = Some(n);
-                        }
-                    }
-                    if let Some(n) = pick_layout {
-                        self.set_layout(n);
-                        ui.close();
-                    }
-                });
                 ui.menu_button("Enviar teclas", |ui| {
                     for (title, list) in [("Sistema", KEYS_SYSTEM), ("Linux TTY", KEYS_TTY), ("Funciones / BIOS", KEYS_BIOS)] {
                         ui.menu_button(title, |ui| {
