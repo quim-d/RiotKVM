@@ -232,13 +232,16 @@ impl Tools {
                 });
             });
             ui.separator();
-            match self.tab {
-                Tab::Firmware => self.ui_firmware(ui, ctx),
-                Tab::Sd => self.ui_sd(ui, ctx),
-            }
-            self.ui_job(ui);
-            ui.separator();
-            crate::settings::repo_link(ui);
+            // contenido con scroll que ocupa todo el alto: la ventana se puede estirar en vertical
+            egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
+                match self.tab {
+                    Tab::Firmware => self.ui_firmware(ui, ctx),
+                    Tab::Sd => self.ui_sd(ui, ctx),
+                }
+                self.ui_job(ui);
+                ui.separator();
+                crate::settings::repo_link(ui);
+            });
         });
         // no se cierra con un trabajo en marcha
         self.open = open || self.job.is_some();
@@ -306,6 +309,7 @@ impl Tools {
             ui.label("Publicada:");
             match &self.avail {
                 None => ui.label(if self.checking { "consultando GitHub..." } else { "?" }),
+                Some(Err(e)) if e.to_string().ends_with("(404)") => ui.colored_label(theme::GRIS, "aún no hay ninguna release publicada"),
                 Some(Err(e)) => ui.colored_label(theme::ROJO, format!("no se pudo consultar: {e}")),
                 Some(Ok(Availability::None { reason, .. })) => ui.colored_label(theme::AMBAR, reason),
                 Some(Ok(Availability::Offer(o))) => ui.label(format!("{} ({}, {}, SHA-256 {:?})", o.version, o.tag, o.asset, o.sha_source)),

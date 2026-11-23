@@ -193,7 +193,7 @@ impl Settings {
         }
         let mut open = true;
         let mut change = None;
-        egui::Window::new("Ajustes").open(&mut open).default_pos([60.0, 80.0]).default_width(460.0).resizable(false).show(ctx, |ui| {
+        egui::Window::new("Ajustes").open(&mut open).default_pos([60.0, 80.0]).default_width(460.0).resizable(true).show(ctx, |ui| {
             ui.horizontal(|ui| {
                 ui.selectable_value(&mut self.tab, Tab::Target, "Servidor");
                 ui.selectable_value(&mut self.tab, Tab::Keyboard, "Teclado");
@@ -201,15 +201,18 @@ impl Settings {
                 ui.selectable_value(&mut self.tab, Tab::Info, "Información");
             });
             ui.separator();
-            change = match self.tab {
-                Tab::Target => self.target_tab(ui, info),
-                Tab::Keyboard => keyboard_tab(ui, info),
-                Tab::Light => self.light_tab(ui),
-                Tab::Info => {
-                    info_tab(ui, info);
-                    None
-                }
-            };
+            // contenido con scroll que ocupa todo el alto: la ventana se puede estirar en vertical
+            egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
+                change = match self.tab {
+                    Tab::Target => self.target_tab(ui, info),
+                    Tab::Keyboard => keyboard_tab(ui, info),
+                    Tab::Light => self.light_tab(ui),
+                    Tab::Info => {
+                        info_tab(ui, info);
+                        None
+                    }
+                };
+            });
         });
         self.open = open;
         change

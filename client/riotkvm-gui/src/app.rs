@@ -1132,9 +1132,10 @@ impl eframe::App for App {
         if self.paste_win {
             let mut open = true;
             let mut text = std::mem::take(&mut self.paste_text);
-            egui::Window::new("Escribir texto en el servidor").open(&mut open).default_width(460.0).show(&ctx, |ui| {
+            egui::Window::new("Escribir texto en el servidor").open(&mut open).default_width(460.0).resizable(true).show(&ctx, |ui| {
                 ui.label(format!("Se teclea con el layout {} ({}).", if self.paste.physical { "us (teclas físicas)" } else { self.layout.as_str() }, if self.paste.physical { "BIOS" } else { "servidor" }));
-                ui.add(egui::TextEdit::multiline(&mut text).desired_rows(8).desired_width(f32::INFINITY));
+                let alto = (ui.available_height() - 32.0).max(120.0); // el cuadro crece con la ventana
+                ui.add_sized([ui.available_width(), alto], egui::TextEdit::multiline(&mut text).desired_rows(8));
                 ui.horizontal(|ui| {
                     ui.label(format!("{} caracteres", text.chars().count()));
                     if ui.button("Teclear en el servidor").clicked() {
