@@ -379,7 +379,9 @@ pub fn start(src: &Source, mode: &Mode, latest: Arc<Latest>) -> std::thread::Joi
 
 /// BGRA (filas de `stride` bytes, `stride >= w*4`) -> RGBA compacto (`w*h*4`) EN EL MISMO búfer, sin reservar otro:
 /// cada fila se desplaza a su sitio (el destino nunca adelanta al origen) y se intercambian R y B con alfa 255.
-/// Medido a 1080p sin relleno: 2,5-2,7 ms -> 1,6-1,7 ms por cuadro (copia del callback + conversión + paso a la GUI).
+/// Banco sintético a 1080p sin relleno (copia del callback + conversión + paso a Color32): 2,5-2,7 ms -> 1,6-1,7 ms por
+/// cuadro. Con la MS2109 real (`vidbench native`) la conversión sola queda igual (mín. ~1,0 ms, p50 1,3-4 ms con el equipo
+/// cargado): lo que se ahorra es la reserva de 8 MB por cuadro y, en la GUI, la copia a Color32.
 pub fn bgra_to_rgba_in_place(mut data: Vec<u8>, w: usize, h: usize, stride: usize) -> Vec<u8> {
     let row = w * 4;
     assert!(stride >= row && data.len() >= stride * h.saturating_sub(1) + row, "búfer BGRA demasiado corto");
