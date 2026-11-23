@@ -1,11 +1,11 @@
-//! Tema QKVM de Ventoy (GRUB2) y `ventoy.json`.
+//! Tema RiotKVM de Ventoy (GRUB2) y `ventoy.json`.
 //!
 //! El tema vive en `packaging/ventoy-theme/` (lo genera `tools/gen_ventoy_theme.py`) y va embebido en el
 //! binario (`build.rs`, ~200 kB). Al preparar la SD se crea dentro del exFAT:
 //!
 //! ```text
 //! /ventoy/ventoy.json
-//! /ventoy/theme/qkvm/theme_<WxH>_<n>.txt + bg_<WxH>_<n>.png, pixmaps, icons/
+//! /ventoy/theme/riotkvm/theme_<WxH>_<n>.txt + bg_<WxH>_<n>.png, pixmaps, icons/
 //!     (Ventoy se queda con los de la resolución activa —resolution_fit— y entre ellos elige uno al azar en cada
 //!     arranque: así rota la cita del pie)
 //! /ventoy/theme/fonts/jbmono-*.pf2, OFL.txt  (JetBrains Mono, SIL OFL 1.1)
@@ -42,7 +42,7 @@ pub fn theme_bytes() -> u64 {
 
 /// Rutas (con barra inicial) de todos los theme_*.txt, 1920x1080 primero.
 pub fn theme_txts() -> Vec<String> {
-    let mut v: Vec<String> = theme_files().into_iter().map(|(p, _)| p).filter(|p| p.starts_with("ventoy/theme/qkvm/theme_") && p.ends_with(".txt")).map(|p| format!("/{p}")).collect();
+    let mut v: Vec<String> = theme_files().into_iter().map(|(p, _)| p).filter(|p| p.starts_with("ventoy/theme/riotkvm/theme_") && p.ends_with(".txt")).map(|p| format!("/{p}")).collect();
     v.sort_by_key(|p| (RESOLUTIONS.iter().position(|r| p.contains(r)), p.clone()));
     v
 }
@@ -64,7 +64,7 @@ pub fn theme_section() -> Value {
 }
 
 /// ventoy.json: castellano, menú en árbol, fuera los `._*` que deja macOS en exFAT, icono de rescate para todo lo
-/// que haya en `/Tools` y alias de esa carpeta. Con `with_theme`, el tema QKVM.
+/// que haya en `/Tools` y alias de esa carpeta. Con `with_theme`, el tema RiotKVM.
 pub fn ventoy_json(with_theme: bool) -> Value {
     let mut v = json!({
         "control": [
@@ -76,7 +76,7 @@ pub fn ventoy_json(with_theme: bool) -> Value {
     if with_theme {
         v["theme"] = theme_section();
     }
-    v["menu_class"] = json!([{"parent": format!("/{TOOLS_DIR}"), "class": "qkvm-rescate"}]);
+    v["menu_class"] = json!([{"parent": format!("/{TOOLS_DIR}"), "class": "riotkvm-rescate"}]);
     v["menu_alias"] = json!([{"dir": format!("/{TOOLS_DIR}"), "alias": "Tools — rescate y diagnóstico"}]);
     v
 }
@@ -113,7 +113,7 @@ mod tests {
             let body = String::from_utf8(f.iter().find(|(p, _)| format!("/{p}") == *t).unwrap().1.to_vec()).unwrap();
             assert!(body.starts_with("ventoy_left_top_color: \"@"), "{t}: la versión de Ventoy se coloca en la 1ª línea");
             let bg = body.lines().find_map(|l| l.strip_prefix("desktop-image: \"")).unwrap().trim_end_matches('"');
-            assert!(has(&format!("ventoy/theme/qkvm/{bg}")), "{t}: {bg}");
+            assert!(has(&format!("ventoy/theme/riotkvm/{bg}")), "{t}: {bg}");
             // cada fuente que nombra el tema está embebida
             for name in body.lines().filter_map(|l| l.split("font = \"").nth(1).or_else(|| l.split("font: \"").nth(1))).map(|r| r.split('"').next().unwrap()) {
                 let size = name.rsplit(' ').next().unwrap();
@@ -121,8 +121,8 @@ mod tests {
                 assert!(has(&format!("ventoy/theme/fonts/jbmono-{style}-{size}.pf2")), "{name}");
             }
         }
-        for n in ["menu_c.png", "select_c.png", "terminal_box_c.png", "thumb_c.png", "icons/qkvm-rescate.png"] {
-            assert!(has(&format!("ventoy/theme/qkvm/{n}")), "{n}");
+        for n in ["menu_c.png", "select_c.png", "terminal_box_c.png", "thumb_c.png", "icons/riotkvm-rescate.png"] {
+            assert!(has(&format!("ventoy/theme/riotkvm/{n}")), "{n}");
         }
         assert!(has("ventoy/theme/fonts/OFL.txt"), "licencia de la fuente");
         assert!(theme_bytes() < 1 << 20, "el tema embebido debe ser pequeño: {}", theme_bytes());
@@ -132,7 +132,7 @@ mod tests {
     fn json_tree_mode_tools_and_theme() {
         let v = ventoy_json(true);
         assert_eq!(v["theme"]["resolution_fit"], 1);
-        assert_eq!(v["theme"]["file"][0], "/ventoy/theme/qkvm/theme_1920x1080_1.txt");
+        assert_eq!(v["theme"]["file"][0], "/ventoy/theme/riotkvm/theme_1920x1080_1.txt");
         assert!(v["theme"]["gfxmode"].as_str().unwrap().starts_with("1920x1080"));
         assert_eq!(v["theme"]["fonts"].as_array().unwrap().len(), 4);
         assert!(v["control"].as_array().unwrap().iter().any(|c| c["VTOY_DEFAULT_MENU_MODE"] == "1"));

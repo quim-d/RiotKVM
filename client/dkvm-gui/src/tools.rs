@@ -84,8 +84,8 @@ pub struct Tools {
     disks: Option<Result<Vec<Disk>, String>>,
     disk_sel: Option<String>,
     confirm_text: String,
-    /// Tema QKVM en la SD (por defecto sí; se pone a true al abrir la ventana la primera vez).
-    qkvm_theme: bool,
+    /// Tema RiotKVM en la SD (por defecto sí; se pone a true al abrir la ventana la primera vez).
+    riotkvm_theme: bool,
     // trabajo en curso y resultado
     job: Option<Job>,
     result: Option<Result<String, String>>,
@@ -191,7 +191,7 @@ impl Tools {
         if !self.env_checked {
             // (pruebas/capturas) DKVM_GUI_TOOLS=fw|sd abre la ventana al arrancar
             self.env_checked = true;
-            self.qkvm_theme = true;
+            self.riotkvm_theme = true;
             match std::env::var("DKVM_GUI_TOOLS").as_deref() {
                 Ok("fw") => self.open = true,
                 Ok("sd") => {
@@ -237,6 +237,8 @@ impl Tools {
                 Tab::Sd => self.ui_sd(ui, ctx),
             }
             self.ui_job(ui);
+            ui.separator();
+            crate::settings::repo_link(ui);
         });
         // no se cierra con un trabajo en marcha
         self.open = open || self.job.is_some();
@@ -507,7 +509,7 @@ impl Tools {
             return;
         }
         ui.add_enabled_ui(!busy, |ui| {
-            ui.checkbox(&mut self.qkvm_theme, "Tema QKVM (calavera y verde fósforo; legacy y UEFI)");
+            ui.checkbox(&mut self.riotkvm_theme, "Tema RiotKVM (calavera y verde fósforo; legacy y UEFI)");
         });
         ui.label(egui::RichText::new("Copia tus ISOs a la SD: instaladores en la raíz, herramientas en /Tools.").color(theme::CIAN));
         ui.add_enabled_ui(!busy, |ui| {
@@ -524,7 +526,7 @@ impl Tools {
     }
 
     fn launch_ventoy(&mut self, ctx: &egui::Context, d: Disk) {
-        let files = ventoy::theme::sd_files(self.qkvm_theme);
+        let files = ventoy::theme::sd_files(self.riotkvm_theme);
         self.start(ctx, &format!("Ventoy en {}", d.id), move |rep, cancel| {
             let e = |e: dkvm_flash::Error| e.to_string();
             // paquete primero: si la descarga falla, el disco queda intacto

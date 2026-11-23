@@ -38,7 +38,7 @@ pub enum SdCmd {
     /// Discos externos/extraíbles candidatos (el dongle en modo A/C sale como «QKVM SD Ventoy»).
     List,
     /// BORRA el disco y escribe Ventoy (MBR: arranca en BIOS legacy y UEFI) con la partición exFAT «Ventoy», el
-    /// tema QKVM, ventoy.json (menú en árbol) y la carpeta /Tools vacía. Las ISO las copias tú.
+    /// tema RiotKVM, ventoy.json (menú en árbol) y la carpeta /Tools vacía. Las ISO las copias tú.
     Ventoy {
         /// Disco (`disk6` en macOS, `sdb` en Linux; ver `dkvm sd list`).
         #[arg(long, required_unless_present = "image", conflicts_with = "image")]
@@ -49,7 +49,7 @@ pub enum SdCmd {
         /// No pedir que se teclee el identificador del disco para confirmar.
         #[arg(long)]
         yes: bool,
-        /// Sin el tema QKVM (queda el de Ventoy; ventoy.json y /Tools se crean igual).
+        /// Sin el tema RiotKVM (queda el de Ventoy; ventoy.json y /Tools se crean igual).
         #[arg(long)]
         no_theme: bool,
     },

@@ -1,0 +1,68 @@
+ventoy_left_top_color: "@760@4@#6E786E@"
+# Tema RiotKVM para Ventoy (GRUB2) 1024x768. GENERADO por tools/gen_ventoy_theme.py: no editar a mano.
+# Estetica de docs/DESIGN.md: fondo negro, verde fosforo, bordes de 1 px, sin redondeos ni degradados.
+desktop-image: "bg_1024x768_3.png"
+desktop-color: "#000000"
+title-text: ""
+message-font: "JetBrains Mono Regular 16"
+message-color: "#D2FFD7"
+message-bg-color: "#000000"
+terminal-font: "JetBrains Mono Regular 16"
+terminal-box: "terminal_box_*.png"
+
++ boot_menu {
+  left = 32
+  top = 184
+  width = 960
+  height = 448
+  menu_pixmap_style = "menu_*.png"
+  item_font = "JetBrains Mono Regular 16"
+  selected_item_font = "JetBrains Mono Bold 16"
+  item_color = "#00FF46"
+  selected_item_color = "#000000"
+  selected_item_pixmap_style = "select_*.png"
+  item_height = 28
+  item_padding = 4
+  item_spacing = 2
+  icon_width = 16
+  icon_height = 16
+  item_icon_space = 8
+  scrollbar = true
+  scrollbar_width = 6
+  scrollbar_frame = "sbframe_*.png"
+  scrollbar_thumb = "thumb_*.png"
+}
+
+# cuenta atras (solo si ventoy.json pone VTOY_MENU_TIMEOUT): barra ambar fina + texto
++ progress_bar {
+  id = "__timeout__"
+  left = 32
+  top = 644
+  width = 960
+  height = 4
+  show_text = false
+  fg_color = "#FFB000"
+  bg_color = "#000000"
+  border_color = "#FFB000"
+}
++ label {
+  id = "__timeout__"
+  text = "@TIMEOUT_NOTIFICATION_LONG@"
+  left = 32
+  top = 654
+  width = 960
+  height = 28
+  align = "left"
+  font = "JetBrains Mono Regular 16"
+  color = "#FFB000"
+}
+
+# avisos de modo de Ventoy (memdisk, iso raw, grub2, wimboot, drivers UEFI): ambar
++ label { left = 32 top = 686 width = 240 height = 28 text = "@VTOY_MEM_DISK@" font = "JetBrains Mono Regular 16" color = "#FFB000" align = "left" }
++ label { left = 272 top = 686 width = 240 height = 28 text = "@VTOY_ISO_RAW@" font = "JetBrains Mono Regular 16" color = "#FFB000" align = "left" }
++ label { left = 512 top = 686 width = 240 height = 28 text = "@VTOY_GRUB2_MODE@" font = "JetBrains Mono Regular 16" color = "#FFB000" align = "left" }
++ label { left = 752 top = 686 width = 240 height = 28 text = "@VTOY_WIMBOOT_MODE@" font = "JetBrains Mono Regular 16" color = "#FFB000" align = "left" }
++ label { left = 672 top = 24 width = 320 height = 28 text = "@VTOY_ISO_UEFI_DRV@" font = "JetBrains Mono Regular 16" color = "#FFB000" align = "right" }
+
+# teclas (F1 ayuda, F2 explorar, F5 herramientas...): texto secundario en gris
++ label { left = 32 top = 724 width = 960 height = 28 text = "@VTOY_HOTKEY_TIP@" font = "JetBrains Mono Regular 16" color = "#6E786E" align = "left" }
