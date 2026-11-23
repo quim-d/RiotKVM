@@ -12,6 +12,7 @@ mod clip;
 mod dlog;
 mod hook;
 mod theme;
+mod tools;
 
 use app::{App, MouseMode, Options};
 use clap::Parser;

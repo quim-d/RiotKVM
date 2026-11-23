@@ -12,6 +12,7 @@ path = "src/main.rs"
 [dependencies]
 dkvm-core = { path = "../dkvm-core", features = ["ble"] }
 dkvm-video = { path = "../dkvm-video" }
+dkvm-flash = { path = "../dkvm-flash" }
 clap.workspace = true
 bytemuck = "1"
 eframe = "0.37"

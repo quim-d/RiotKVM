@@ -199,6 +199,7 @@ pub struct App {
     rep_combo: String,
     rep_interval: u32,
     rep_secs: f32,
+    tools: crate::tools::Tools,
 }
 
 /// Combinaciones que el SO local intercepta o son incómodas de teclear.
@@ -311,6 +312,7 @@ impl App {
             rep_combo: "f2".into(),
             rep_interval: 250,
             rep_secs: 10.0,
+            tools: Default::default(),
         };
         app.layout = dkvm_core::layouts::canonical(&app.opts.layout).unwrap_or("es").to_string();
         app.modes = app.opts.modes.clone();
@@ -1012,6 +1014,9 @@ impl eframe::App for App {
                     ui.separator();
                     ui.label(egui::RichText::new(format!("QKVM {} · {}", env!("CARGO_PKG_VERSION"), self.opts.transport_desc)).color(theme::GRIS));
                 });
+                if ui.button("Herramientas").on_hover_text("Flashear el firmware del dongle · preparar una microSD con Ventoy").clicked() {
+                    self.tools.open = true;
+                }
                 let info = self.video.latest.info();
                 ui.label(egui::RichText::new(if info.is_empty() { self.video.desc.clone() } else { info }).color(theme::GRIS));
             });
@@ -1173,6 +1178,7 @@ impl eframe::App for App {
                 });
             });
         }
+        self.tools.show(&ctx);
         if self.paste != paste_before {
             self.paste.save();
         }

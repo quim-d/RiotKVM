@@ -1372,6 +1372,7 @@ dependencies = [
  "bytemuck",
  "clap",
  "dkvm-core",
+ "dkvm-flash",
  "dkvm-video",
  "eframe",
  "embed-resource",
