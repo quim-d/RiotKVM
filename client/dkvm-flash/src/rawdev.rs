@@ -243,7 +243,9 @@ mod linux {
         let (fd,): (dbus::arg::OwnedFd,) = p
             .method_call("org.freedesktop.UDisks2.Block", "OpenDevice", ("rw", PropMap::new()))
             .map_err(|e| Error::msg(format!("udisks2 no abrió {dev} (¿autorización denegada?): {e}")))?;
-        Ok(File::from(std::os::fd::OwnedFd::from(fd)))
+        use std::os::fd::FromRawFd;
+        // dbus::arg::OwnedFd cede el descriptor; desde aquí lo cierra File
+        Ok(unsafe { File::from_raw_fd(fd.into_fd()) })
     }
 }
 
