@@ -119,6 +119,15 @@ int typed(const char* s, int x, int y, uint32_t t, uint32_t t0, uint32_t per, ui
   if (n) { char b[24]; memcpy(b, s, n); b[n] = 0; TX(x, y, b, col, sz); }
   return n;
 }
+// firma "made by quim-d" en GRIS, fuente pequena (TomThumb: 4 px por caracter, 7 filas con descendentes), arrimada a la
+// derecha en la fila y; aparece a los 600 ms de animacion
+void madeBy(int y, uint32_t t) {
+  if (t < 600 || !vis(y, 7)) return;
+  static const char s[] = "made by quim-d";
+  spr.setFont(&fonts::TomThumb); spr.setTextColor(C_GREY); spr.setTextSize(1); spr.setTextDatum(top_left);
+  spr.drawString(s, SW - 2 - 4 * (int)(sizeof s - 1), y - by);
+  spr.setFont(&fonts::Font0);
+}
 // lineas de arranque segun el modo (solo lo que existe en este modo)
 int bootLines(const char** o) {
   int n = 0; o[n++] = "[ OK ] usb";
@@ -140,6 +149,7 @@ void splashV1(uint32_t t) {
   const char* ln[4]; int n = bootLines(ln); if (n > 3) n = 3;
   for (int i = 0; i < n; i++) typed(ln[i], 76, 36 + 10 * i, t, 640 + 140 * i, 20, C_GREEN);
   char m[12]; snprintf(m, sizeof m, "mode %c", kvmmode::letter()); typed(m, 76, 68, t, 1050, 30, C_AMBER);
+  madeBy(1, t);                                         // arriba a la derecha: abajo esta "mode C"
 }
 void splashV2(uint32_t t) {
   const char* ln[4]; int n = bootLines(ln);
@@ -150,6 +160,7 @@ void splashV2(uint32_t t) {
   if (lvl) skullDither(90, 8, lvl);
   if (t >= 850) eyes(90, 8, t < 1050 ? C_CYAN : C_MAG, t >= 1000 && t < 1060);
   typed("RiotKVM", 3, 62, t, 900, 25, C_AMBER, 2);
+  madeBy(73, t);                                        // abajo a la derecha: bajo la calavera (filas 8..71), a la derecha del titulo (x <= 87)
 }
 void splashV3(uint32_t t) {
   uint32_t fr = t / 40;
@@ -160,6 +171,7 @@ void splashV3(uint32_t t) {
   if (t >= 320) eyes(ox, 8, t < 400 ? C_WHITE : t < 600 ? C_GREEN : t < 800 ? C_CYAN : C_MAG, t >= 880 && t < 940);
   typed("RiotKVM", 76, 18, t, 860, 20, C_GREEN, 2); typed("ready_", 76, 44, t, 1000, 30, C_AMBER);
   if (t >= 700 && t < 900 && hsh(fr, 3) % 100 < 40) FR(76, 14 + (int)(hsh(fr, 5) % 24), 74, 1, C_DGREEN);
+  madeBy(73, t);
 }
 
 // ---- pantalla de modo: cabecera (acento) + icono 1 bit + filas segun modo. Estatica; solo se recompone la banda que cambia ----
@@ -270,7 +282,7 @@ void uiTask(void*) {
 
   uint32_t t0 = millis(); bool first = true;
   while (millis() - t0 < UI_SPLASH_MS) {
-    splashT = millis() - t0;
+    splashT = (millis() - t0) * UI_SPLASH_ANIM_MS / UI_SPLASH_MS;   // tiempo de animacion (mas lento que el real)
     int64_t a = esp_timer_get_time();
     drawFull(SC_SPLASH);
     noteFrame(a);
