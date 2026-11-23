@@ -43,7 +43,8 @@ impl Disk {
     /// El dongle QKVM en modo A/C (USB MSC vendor `QKVM`, product `SD Ventoy`).
     pub fn is_qkvm(&self) -> bool {
         let m = self.model.to_ascii_lowercase();
-        m.contains("qkvm") || m.contains("sd ventoy")
+        // RiotKVM (firmware actual) o QKVM (anterior); "SD Ventoy" es el producto en ambos
+        m.contains("riotkvm") || m.contains("qkvm") || m.contains("sd ventoy")
     }
 
     /// Lector de tarjetas (integrado o USB).
@@ -425,6 +426,7 @@ mod tests {
         let mut bad = dongle.clone();
         bad.system = true;
         assert_eq!(default_choice(&[bad]), None);
+        assert!(mk("disk7", "RiotKVM SD Ventoy Media", false).is_qkvm(), "firmware con el nombre nuevo");
         assert!(confirmed(&dongle, " disk6\n"));
         assert!(!confirmed(&dongle, "disk"));
         assert!(!confirmed(&dongle, "DISK6"));

@@ -8,7 +8,7 @@ Estado: **Rust** (decisión del dueño, 2026-11-20). La implementación Python o
 
 ```
 1. Binarios listos: ver sección 7 (instalación). Desde la fuente: cd client && cargo build --release   # -> target/release/dkvm-gui y dkvm  (copias de trabajo en client/dist/)
-2. Enchufa la capturadora HDMI al portátil y el dongle (con firmware BLE v1) al servidor; el dongle anuncia "QKVM".
+2. Enchufa la capturadora HDMI al portátil y el dongle (con firmware BLE v1) al servidor; el dongle anuncia "RiotKVM" (el firmware anterior, "QKVM": también vale).
 3. dkvm-gui.exe                                        # sin argumentos: busca el dongle por BLE (UUID de servicio), conecta y abre el vídeo (si la capturadora no está, muestra un patrón y la recoge sola al aparecer: sin probar en vivo)
 4. Barra inferior: "buscando..." -> "● QKVM · BLE MTU 247". Si lo apagas/flasheas, "reconectando" y vuelve solo.
 5. Clic en el vídeo = capturar teclado y ratón. Ctrl+Shift+F12 (o perder el foco) = liberar (siempre visible en la barra mientras captura). Ctrl+Alt+Supr: menú "Enviar". Diagnóstico: dkvm-gui --log gui.log (sección 3e).
