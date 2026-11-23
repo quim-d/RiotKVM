@@ -84,15 +84,6 @@ fn path_label(via_rel: bool) -> &'static str {
     }
 }
 
-fn os_hint(o: TargetOs) -> &'static str {
-    match o {
-        TargetOs::Windows => "clics por el ratón relativo (comprobado)",
-        TargetOs::Macos => "clics por el informe absoluto (comprobado)",
-        TargetOs::Linux => "clics por el ratón relativo (como Fedora)",
-        TargetOs::Fedora => "clics por el ratón relativo (comprobado)",
-    }
-}
-
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Tab {
     Target,
@@ -143,7 +134,7 @@ impl Settings {
         let mut change = None;
         egui::Window::new("Ajustes").open(&mut open).default_pos([60.0, 80.0]).default_width(460.0).resizable(false).show(ctx, |ui| {
             ui.horizontal(|ui| {
-                ui.selectable_value(&mut self.tab, Tab::Target, "Equipo controlado");
+                ui.selectable_value(&mut self.tab, Tab::Target, "Servidor");
                 ui.selectable_value(&mut self.tab, Tab::Keyboard, "Teclado");
                 ui.selectable_value(&mut self.tab, Tab::Info, "Información");
             });
@@ -162,46 +153,35 @@ impl Settings {
     }
 
     fn target_tab(&mut self, ui: &mut egui::Ui, info: &Info) -> Option<Change> {
-        ui.label(egui::RichText::new("Sistema del equipo controlado").strong());
-        ui.label(
-            "Cambia cómo se envían los clics y la rueda del ratón absoluto al equipo controlado (por el informe absoluto o \
-             por el ratón relativo). Elige el SO del servidor si el clic no responde. Se aplica al momento, sin reconectar.",
-        );
-        ui.add_space(4.0);
+        ui.label(egui::RichText::new("Sistema del servidor").strong());
+        ui.label(egui::RichText::new("Si el clic no responde, cambia el sistema.").color(theme::GRIS));
+        ui.add_space(6.0);
         let before = self.compat;
-        for o in TargetOs::ALL {
-            ui.horizontal(|ui| {
-                if ui.radio(self.compat.os == Some(o), o.label()).clicked() {
+        ui.horizontal(|ui| {
+            for o in TargetOs::ALL {
+                if ui.selectable_label(self.compat.os == Some(o), o.label()).clicked() {
                     self.compat = Compat { os: Some(o), via_rel: o.abs_buttons_via_rel() };
                 }
-                ui.label(egui::RichText::new(os_hint(o)).color(theme::GRIS));
-            });
-        }
-        if ui.radio(self.compat.os.is_none(), "Manual (avanzado)").clicked() {
-            self.compat.os = None;
-        }
-        ui.add_enabled_ui(self.compat.os.is_none(), |ui| {
-            ui.indent("manual", |ui| {
-                ui.horizontal(|ui| {
-                    ui.label("clics y rueda:");
-                    ui.radio_value(&mut self.compat.via_rel, false, "informe absoluto");
-                    ui.radio_value(&mut self.compat.via_rel, true, "ratón relativo");
-                });
+            }
+        });
+        ui.add_space(6.0);
+        egui::CollapsingHeader::new("Avanzado").default_open(self.compat.os.is_none()).show(ui, |ui| {
+            ui.horizontal(|ui| {
+                ui.label("Clics por:");
+                if ui.radio(!self.compat.via_rel, "absoluto").clicked() {
+                    self.compat = Compat { os: None, via_rel: false };
+                }
+                if ui.radio(self.compat.via_rel, "relativo").clicked() {
+                    self.compat = Compat { os: None, via_rel: true };
+                }
             });
         });
-        ui.add_space(4.0);
-        let via_rel = self.compat.opts().abs_buttons_via_rel;
-        ui.label(egui::RichText::new(format!("Ahora: clics y rueda por el {}", path_label(via_rel))).color(theme::VERDE));
-        if let Some(v) = self.env_note {
-            ui.colored_label(theme::AMBAR, format!("DKVM_ABS_BUTTONS fijó el arranque (clics por el {}); lo que elijas aquí manda desde ahora.", path_label(v)));
-        }
         if !info.mouse_abs {
-            ui.colored_label(theme::AMBAR, "El ratón está en modo relativo (rel): ahí los clics van siempre por el ratón relativo y este ajuste no influye.");
+            let msg = if self.compat.os == Some(TargetOs::Macos) { "Ratón en rel: en macOS el clic no funciona, usa abs." } else { "Ratón en rel: este ajuste no se aplica." };
+            ui.colored_label(theme::AMBAR, msg);
+        } else if self.env_note.is_some() {
+            ui.colored_label(theme::AMBAR, "DKVM_ABS_BUTTONS fijó el arranque.");
         }
-        ui.label(
-            egui::RichText::new("Nota: con un Mac como destino el clic en modo relativo (rel) no funciona; usa el modo absoluto (abs).")
-                .color(theme::GRIS),
-        );
         if self.compat == before {
             return None;
         }
@@ -216,8 +196,7 @@ impl Settings {
 
 fn keyboard_tab(ui: &mut egui::Ui, info: &Info) -> Option<Change> {
     ui.label(egui::RichText::new("Idioma del teclado del servidor").strong());
-    ui.label("Distribución con la que el equipo controlado interpreta las teclas (pegar y escribir texto la usan). También en la barra: Teclado.");
-    ui.add_space(4.0);
+    ui.add_space(6.0);
     let mut pick = None;
     for n in dkvm_core::layouts::LAYOUT_NAMES {
         if ui.selectable_label(info.layout == n, dkvm_core::layouts::layout_label(n)).clicked() && info.layout != n {

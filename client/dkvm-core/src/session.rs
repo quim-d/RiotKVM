@@ -113,7 +113,7 @@ impl TargetOs {
         match self {
             TargetOs::Windows => "Windows",
             TargetOs::Macos => "macOS",
-            TargetOs::Linux => "Linux (genérico)",
+            TargetOs::Linux => "Linux",
             TargetOs::Fedora => "Fedora",
         }
     }
