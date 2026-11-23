@@ -10,6 +10,7 @@ APP="$STAGE/QKVM.app"
 
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$OUT"
 cp "$BIN/dkvm-gui" "$APP/Contents/MacOS/dkvm-gui"
+cp "$HERE/QKVM.icns" "$APP/Contents/Resources/QKVM.icns"
 sed "s/@VERSION@/$VERSION/g" "$HERE/Info.plist.in" > "$APP/Contents/Info.plist"
 plutil -lint "$APP/Contents/Info.plist"
 chmod +x "$APP/Contents/MacOS/dkvm-gui"

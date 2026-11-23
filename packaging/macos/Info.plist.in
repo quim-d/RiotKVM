@@ -10,6 +10,8 @@
     <string>io.github.quim-dkvm.gui</string>
     <key>CFBundleExecutable</key>
     <string>dkvm-gui</string>
+    <key>CFBundleIconFile</key>
+    <string>QKVM</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
