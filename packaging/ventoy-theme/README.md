@@ -13,4 +13,4 @@ Generado por `tools/gen_ventoy_theme.py` (no editar a mano). En un contenedor De
 - `fonts/`: JetBrains Mono Regular/Bold en 16 y 24 px convertida a `.pf2` con `grub-mkfont` (ASCII, Latin-1/Latin
   Extended-A, puntuación, flechas, cajas y bloques). Licencia: SIL Open Font License 1.1 (`fonts/OFL.txt`), que
   permite redistribuirla embebida; el nombre «JetBrains Mono» no se usa para la versión convertida.
-- `dkvm-flash` lo embebe (build.rs) y lo escribe en `/ventoy/theme/` de la SD (este README no se copia).
+- `riotkvm-flash` lo embebe (build.rs) y lo escribe en `/ventoy/theme/` de la SD (este README no se copia).

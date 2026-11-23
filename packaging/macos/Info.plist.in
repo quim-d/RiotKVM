@@ -6,10 +6,12 @@
     <string>RiotKVM</string>
     <key>CFBundleDisplayName</key>
     <string>RiotKVM</string>
+    <!-- Identificador heredado del nombre anterior (quim-dkvm): NO cambiarlo. macOS ata a él los permisos de Cámara y
+         Bluetooth (TCC); con otro, la app ya instalada volvería a pedirlos y quedarían entradas huérfanas. -->
     <key>CFBundleIdentifier</key>
     <string>io.github.quim-dkvm.gui</string>
     <key>CFBundleExecutable</key>
-    <string>dkvm-gui</string>
+    <string>riotkvm-gui</string>
     <key>CFBundleIconFile</key>
     <string>RiotKVM</string>
     <key>CFBundlePackageType</key>
