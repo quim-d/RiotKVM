@@ -1,4 +1,4 @@
-"""CLI de dkvm. Códigos de salida: 0 ok, 1 error, 2 uso, 3 dongle no encontrado, 4 el dongle dijo 'err', 5 fallo de E/S/timeout."""
+"""CLI de riotkvm. Códigos de salida: 0 ok, 1 error, 2 uso, 3 dongle no encontrado, 4 el dongle dijo 'err', 5 fallo de E/S/timeout."""
 from __future__ import annotations
 
 import json
@@ -9,7 +9,7 @@ from functools import wraps
 import click
 
 from . import __version__
-from .errors import DkvmError, UsageError
+from .errors import RiotKvmError, UsageError
 from .input import Kvm, parse_screen
 from .script import Context, do_move, run_script
 from .transport import MockTransport, SerialTransport, list_ports
@@ -39,7 +39,7 @@ def _fail(app_json: bool, e: Exception, code: int):
     if app_json:
         click.echo(json.dumps({"ok": False, "error": str(e), "code": code}, ensure_ascii=False))
     else:
-        click.echo(f"dkvm: error: {e}", err=True)
+        click.echo(f"riotkvm: error: {e}", err=True)
     sys.exit(code)
 
 
@@ -52,21 +52,21 @@ def with_kvm(fn):
             with app.make_transport() as t:
                 kvm = Kvm(t, app.layout)
                 fn(app, kvm, *a, **kw)
-        except DkvmError as e:
+        except RiotKvmError as e:
             _fail(app.json, e, e.exit_code)
     return wrapper
 
 
 @click.group(context_settings={"help_option_names": ["-h", "--help"]})
-@click.option("--port", "-p", envvar="DKVM_PORT", default=None, help="Puerto serie (COM5, /dev/ttyACM0) o 'mock'. Por defecto: autodetecta el dongle.")
-@click.option("--layout", "-l", envvar="DKVM_LAYOUT", default="es", show_default=True, help="Distribución de teclado del equipo DESTINO (es, us).")
-@click.option("--screen", envvar="DKVM_SCREEN", default=None, help="Resolución del destino ANCHOxALTO: las coordenadas absolutas pasan a ser píxeles.")
+@click.option("--port", "-p", envvar=["RIOTKVM_PORT", "DKVM_PORT"], default=None, help="Puerto serie (COM5, /dev/ttyACM0) o 'mock'. Por defecto: autodetecta el dongle.")
+@click.option("--layout", "-l", envvar=["RIOTKVM_LAYOUT", "DKVM_LAYOUT"], default="es", show_default=True, help="Distribución de teclado del equipo DESTINO (es, us).")
+@click.option("--screen", envvar=["RIOTKVM_SCREEN", "DKVM_SCREEN"], default=None, help="Resolución del destino ANCHOxALTO: las coordenadas absolutas pasan a ser píxeles.")
 @click.option("--json", "as_json", is_flag=True, help="Salida JSON en stdout (errores incluidos).")
 @click.option("--verbose", "-v", is_flag=True, help="Vuelca las órdenes enviadas a stderr.")
-@click.version_option(__version__, prog_name="dkvm")
+@click.version_option(__version__, prog_name="riotkvm")
 @click.pass_context
 def cli(ctx, port, layout, screen, as_json, verbose):
-    """dkvm: controla el dongle KVM (teclado y ratón del servidor)."""
+    """riotkvm: controla el dongle KVM (teclado y ratón del servidor)."""
     try:
         scr = parse_screen(screen) if screen else None
     except UsageError as e:
@@ -126,7 +126,7 @@ def type_(app, kvm, text, delay, enter, fw):
 @click.option("--up", is_flag=True, help="Solo soltar.")
 @with_kvm
 def key(app, kvm, combos, hold, down, up):
-    """Pulsa combinaciones: dkvm key ctrl+alt+del  |  dkvm key win+r  |  dkvm key f5 enter"""
+    """Pulsa combinaciones: riotkvm key ctrl+alt+del  |  riotkvm key win+r  |  riotkvm key f5 enter"""
     if down and up:
         raise UsageError("--down y --up son excluyentes")
     for c in combos:
@@ -166,7 +166,7 @@ def mouse(app, kvm, x, y, relative):
 @click.option("--interval", type=float, default=0.05, show_default=True, help="Segundos entre clics múltiples.")
 @with_kvm
 def click_(app, kvm, button, count, at, relative, interval):
-    """Clic: dkvm click [left|right|middle] [-n 2] [--at X Y]"""
+    """Clic: riotkvm click [left|right|middle] [-n 2] [--at X Y]"""
     if at:
         do_move(kvm, at[0], at[1], False, app.screen)
     kvm.click(button, count, relative, interval)
@@ -187,7 +187,7 @@ def scroll(app, kvm, amount, relative):
 @click.argument("line", nargs=-1, required=True)
 @with_kvm
 def raw(app, kvm, line):
-    """Envía una orden cruda del protocolo del dongle (depuración): dkvm raw kd 0x04"""
+    """Envía una orden cruda del protocolo del dongle (depuración): riotkvm raw kd 0x04"""
     reply = kvm.raw(" ".join(line))
     app.emit({"reply": reply}, reply)
 
@@ -198,7 +198,7 @@ def raw(app, kvm, line):
 @click.option("--mouse-mode", type=click.Choice(["abs", "rel"]), default="abs", show_default=True)
 @click.pass_obj
 def run(app: App, script, dry_run, mouse_mode):
-    """Ejecuta una macro (fichero o '-' para stdin). Formato en 'dkvm run --help' y dkvm/script.py."""
+    """Ejecuta una macro (fichero o '-' para stdin). Formato en 'riotkvm run --help' y riotkvm/script.py."""
     text = script.read()
     try:
         if dry_run:
@@ -209,21 +209,21 @@ def run(app: App, script, dry_run, mouse_mode):
             run_script(ctx, text, on_step=(lambda n, tok: click.echo(f"# {n}: {' '.join(tok)}", err=True)) if app.verbose else None)
         app.emit({"results": [{"cmd": c, "value": v} for c, v in ctx.results]},
                  "\n".join(f"{c}: {v}" for c, v in ctx.results) or None)
-    except DkvmError as e:
+    except RiotKvmError as e:
         _fail(app.json, e, e.exit_code)
 
 
 @cli.command()
 @click.argument("shell", type=click.Choice(["bash", "zsh", "fish"]))
 def completion(shell):
-    """Imprime el script de autocompletado. Ej.: eval "$(dkvm completion bash)"."""
+    """Imprime el script de autocompletado. Ej.: eval "$(riotkvm completion bash)"."""
     from click.shell_completion import get_completion_class
     cls = get_completion_class(shell)
-    click.echo(cls(cli, {}, "dkvm", "_DKVM_COMPLETE").source())
+    click.echo(cls(cli, {}, "riotkvm", "_RIOTKVM_COMPLETE").source())
 
 
 def main():
-    cli(prog_name="dkvm")
+    cli(prog_name="riotkvm")
 
 
 if __name__ == "__main__":

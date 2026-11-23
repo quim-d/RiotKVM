@@ -29,7 +29,7 @@ def list_ports() -> list[dict]:
 def find_dongle_port() -> str:
     found = [p["port"] for p in list_ports() if p["is_dongle"]]
     if not found:
-        raise DeviceNotFound("no hay ningún dongle (VID 1209:0001) conectado; usa --port o 'dkvm scan'")
+        raise DeviceNotFound("no hay ningún dongle (VID 1209:0001) conectado; usa --port o 'riotkvm scan'")
     if len(found) > 1:
         raise DeviceNotFound(f"varios dongles ({', '.join(found)}); elige con --port")
     return found[0]

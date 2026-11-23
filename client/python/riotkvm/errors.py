@@ -1,23 +1,23 @@
 """Errores del cliente y su código de salida de la CLI."""
 
 
-class DkvmError(Exception):
+class RiotKvmError(Exception):
     exit_code = 1
 
 
-class UsageError(DkvmError):
+class UsageError(RiotKvmError):
     exit_code = 2
 
 
-class DeviceNotFound(DkvmError):
+class DeviceNotFound(RiotKvmError):
     exit_code = 3
 
 
-class DeviceError(DkvmError):
+class DeviceError(RiotKvmError):
     """El dongle respondió 'err ...'."""
     exit_code = 4
 
 
-class TransportError(DkvmError):
+class TransportError(RiotKvmError):
     """Fallo de E/S, timeout o respuesta ilegible."""
     exit_code = 5

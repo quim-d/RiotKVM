@@ -1,6 +1,6 @@
 """Genera client/testdata/oracle.json con las salidas de la implementación Python de referencia.
 
-La implementación Rust (dkvm-core/tests/oracle.rs) debe producir lo mismo para las mismas entradas:
+La implementación Rust (riotkvm-core/tests/oracle.rs) debe producir lo mismo para las mismas entradas:
 mismos usos HID, mismas tramas enviadas al transporte y mismos códigos de salida de error.
 
     cd client/python && python tools/gen_oracle.py
@@ -15,13 +15,13 @@ sys.path.insert(0, os.path.join(HERE, ".."))
 
 import shlex  # noqa: E402
 
-from dkvm import protocol as P  # noqa: E402
-from dkvm.errors import DkvmError  # noqa: E402
-from dkvm.input import Kvm, abs_from_pixels  # noqa: E402
-from dkvm.keys import parse_combo  # noqa: E402
-from dkvm.layouts import get_layout  # noqa: E402
-from dkvm.script import Context, parse_script, run_script  # noqa: E402
-from dkvm.transport import MockTransport  # noqa: E402
+from riotkvm import protocol as P  # noqa: E402
+from riotkvm.errors import RiotKvmError  # noqa: E402
+from riotkvm.input import Kvm, abs_from_pixels  # noqa: E402
+from riotkvm.keys import parse_combo  # noqa: E402
+from riotkvm.layouts import get_layout  # noqa: E402
+from riotkvm.script import Context, parse_script, run_script  # noqa: E402
+from riotkvm.transport import MockTransport  # noqa: E402
 
 
 def mk(layout):
@@ -37,7 +37,7 @@ def err(e):
 def guard(fn):
     try:
         return fn()
-    except DkvmError as e:
+    except RiotKvmError as e:
         return err(e)
 
 
@@ -162,7 +162,7 @@ for sc in scripts:
         try:
             run_script(ctx, sc)
             r = {"sent": list(t.sent), "results": [[c, v] for c, v in ctx.results]}
-        except DkvmError as e:
+        except RiotKvmError as e:
             r = {"error": e.exit_code, "sent": list(t.sent), "msg": str(e)}
         except Exception as e:  # ValueError de float() etc. que el Python deja escapar
             r = {"error": None, "sent": list(t.sent), "msg": f"{type(e).__name__}: {e}"}
