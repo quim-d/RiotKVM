@@ -203,9 +203,16 @@ fn clip_resultado() {
 }
 
 #[test]
+fn connection_y_status_dicen_el_nombre_del_dongle() {
+    let (mut s, _h) = mock_session(0);
+    assert_eq!(s.call("connection", &json!({})).unwrap()["name"], "RiotKVM");
+    assert_eq!(s.call("status", &json!({})).unwrap()["name"], "RiotKVM");
+}
+
+#[test]
 fn raw_lista_blanca() {
     let (mut s, h) = mock_session(0);
-    for bad in ["reboot", "mode c", "bootloader", "ble off", "coredump", "kall_never", "MODE a"] {
+    for bad in ["reboot", "mode c", "bootloader", "ble off", "coredump", "kall_never", "MODE a", "name Otro"] {
         assert!(s.call("raw", &json!({"line": bad})).unwrap_err().contains("no está permitida"), "{bad}");
     }
     for bad in ["reboot\u{0}", "kall\u{0}reboot", "status\nreboot", "mode\tc"] {
