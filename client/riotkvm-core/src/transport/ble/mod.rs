@@ -79,6 +79,10 @@ pub trait Codec: Send {
     fn check_info(&self, _bytes: &[u8]) -> Result<()> {
         Ok(())
     }
+    /// Nombre del dongle según INFO (el que tiene ahora, aunque el sistema tenga cacheado otro). `None` = no lo publica.
+    fn info_name(&self, _bytes: &[u8]) -> Option<String> {
+        None
+    }
     /// INFO crudo -> texto legible.
     fn info_text(&self, bytes: &[u8]) -> String {
         format!("{bytes:02x?}")
@@ -342,7 +346,9 @@ fn link_thread(mut connector: Box<dyn GattConnector>, mut codec: Box<dyn Codec>,
         };
         let mut link = link;
         // compatibilidad de protocolo: se lee INFO antes de dar el enlace por bueno
+        let mut info_name = None;
         if let Ok(info) = link.read_info() {
+            info_name = codec.info_name(&info);
             if let Err(e) = codec.check_info(&info) {
                 link.disconnect();
                 attempt += 1;
@@ -353,7 +359,8 @@ fn link_thread(mut connector: Box<dyn GattConnector>, mut codec: Box<dyn Codec>,
         }
         let mtu = link.mtu();
 
-        set_state(&sh, LinkState::Connected { name: link.name(), mtu });
+        // el nombre de INFO manda sobre el anunciado: macOS/Windows cachean el nombre GAP de un dispositivo ya visto
+        set_state(&sh, LinkState::Connected { name: info_name.unwrap_or_else(|| link.name()), mtu });
         // un `Lost` de un enlace anterior que quedara en cola no debe tumbar este
         let mut carry: VecDeque<Inbox> = VecDeque::new();
         while let Ok(m) = rx.try_recv() {

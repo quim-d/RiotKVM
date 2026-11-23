@@ -76,6 +76,7 @@ riotkvm type "hola mundo"       # teclear texto con la distribución del servido
 riotkvm key ctrl+alt+del
 riotkvm fw check                # versión instalada frente a la publicada
 riotkvm led 00ff00 --brillo 40  # luz verde (auto | off | RRGGBB)
+riotkvm name Rack3              # renombrar el dongle (nombre BLE y de su pantalla)
 ```
 
 Referencia completa del cliente (GUI, CLI, MCP, latencias, pruebas): [`client/README.md`](client/README.md).

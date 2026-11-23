@@ -1,4 +1,6 @@
-# Previsualiza offline 3 variantes del splash (160x80, 1,2 s) con los assets reales de src/ui_assets.h.
+# Previsualiza offline 3 variantes del splash (160x80, 1,8 s: la animacion se escribe en 1,2 s y va 1,5x mas lenta,
+# como UI_SPLASH_MS / UI_SPLASH_ANIM_MS de src/ui_lcd.h) con los assets reales de src/ui_assets.h y la firma "made by
+# quim-d" con la fuente TomThumb de LovyanGFX (si esta en .pio/libdeps; si no, se omite).
 # Salida: docs/ui/splash_<v>.gif (x4) y docs/ui/splash_<v>_strip.png (tira de frames). Uso: python tools/preview_splash.py
 import os, re, random
 from PIL import Image, ImageDraw, ImageFont
@@ -11,11 +13,35 @@ SK, BN = arr("skull"), arr("bones")
 def bit(a, x, y): return (a[y * 8 + x // 8] >> (7 - x % 8)) & 1
 W, H = 160, 80
 GREEN, DG, AMB, MAG, CY, BONE, GREY, RED = (0,255,70),(0,90,30),(255,176,0),(255,0,200),(0,220,255),(210,255,215),(110,120,110),(255,40,40)
-try: F = ImageFont.truetype("C:/Windows/Fonts/consola.ttf", 8)
-except Exception: F = ImageFont.load_default()
-try: F2 = ImageFont.truetype("C:/Windows/Fonts/consolab.ttf", 14)
-except Exception: F2 = F
+def font(cands, size, fallback):
+    for path, idx in cands:
+        try: return ImageFont.truetype(path, size, index=idx)
+        except Exception: pass
+    return fallback
+F = font([("C:/Windows/Fonts/consola.ttf", 0), ("/System/Library/Fonts/Menlo.ttc", 0)], 8, ImageFont.load_default())   # Windows o macOS
+F2 = font([("C:/Windows/Fonts/consolab.ttf", 0), ("/System/Library/Fonts/Menlo.ttc", 1)], 14, F)
 IM = None
+SPLASH_MS, ANIM_MS = 1800, 1200
+# TomThumb (GFXfont de LovyanGFX): glifos reales para la firma
+TT = None
+_tt = os.path.join(root, ".pio", "libdeps", "tdongle-s3", "LovyanGFX", "src", "lgfx", "Fonts", "GFXFF", "TomThumb.h")
+if os.path.exists(_tt):
+    _h = re.sub(r"/\*.*?\*/", "", open(_tt, encoding="utf-8", errors="ignore").read(), flags=re.S)   # sin comentarios (llevan 0x..)
+    _bm = [int(x, 16) for x in re.findall(r"0x([0-9A-Fa-f]{2})", re.search(r"TomThumbBitmaps\[\] PROGMEM = \{(.*?)\};", _h, re.S).group(1))]
+    _gl = [tuple(int(v) for v in g) for g in re.findall(r"\{\s*(-?\d+),\s*(-?\d+),\s*(-?\d+),\s*(-?\d+),\s*(-?\d+),\s*(-?\d+)\s*\}", re.search(r"TomThumbGlyphs\[\] PROGMEM = \{(.*?)\};", _h, re.S).group(1))]
+    TT = (_bm, _gl)
+def tiny(d, s, x, y, col):
+    """Como drawString con TomThumb y datum top_left (ascendente 5: la linea base queda en y+5)."""
+    if not TT: return
+    bm, gl = TT
+    for ch in s:
+        off, w, h, adv, xo, yo = gl[ord(ch) - 0x20]   # esta version: un byte por fila (width 8), MSB a la izquierda
+        for yy in range(h):
+            for xx in range(w):
+                if bm[off + yy] >> (7 - xx) & 1: d.point((x + xo + xx, y + 5 + yo + yy), fill=col)
+        x += adv
+def made_by(d, y, t):
+    if t >= 600: tiny(d, "made by quim-d", W - 2 - 4 * 14, y, GREY)
 def big(txt, x, y, col, k=3):
     if not txt: return
     m = Image.new("1", (6 * len(txt), 8), 0); ImageDraw.Draw(m).text((0, -1), txt, fill=1, font=F)
@@ -60,6 +86,7 @@ def v1(t):
     typed(d, "RiotKVM", 76, 12, t, 300, 60, GREEN, F2)
     typed(d, "[ OK ] usb", 76, 36, t, 640, 20, GREEN); typed(d, "[ OK ] hid", 76, 46, t, 780, 20, GREEN)
     typed(d, "[ OK ] ble", 76, 56, t, 920, 20, GREEN); typed(d, "mode C", 76, 68, t, 1050, 30, AMB)
+    made_by(d, 1, t)
     return im
 
 # V2 POST/BIOS: lineas de arranque tipo terminal a la izquierda; calavera aparece por tramado ordenado (4 pasos)
@@ -79,6 +106,7 @@ def v2(t):
             if sp[xx, yy] != (0, 0, 0) and BAYER[yy % 4][xx % 4] < lvl: px[xx, yy] = sp[xx, yy]
     if t >= 850: eyes(d, 90, 8, CY if t < 1050 else MAG, 1000 <= t < 1060)
     if t >= 900: typed(d, "RiotKVM", 3, 62, t, 900, 40, AMB)
+    made_by(d, 73, t)
     return im
 
 # V3 APERTURA: calavera centrada se abre desde el centro, tibias entran por los lados, flash y desliza a la izq. + titulo
@@ -94,13 +122,15 @@ def v3(t):
         eyes(d, ox, 8, col, 880 <= t < 940)
     if 650 <= t: typed(d, "RiotKVM", 76, 18, t, 780, 45, GREEN, F2); typed(d, "ready_", 76, 44, t, 1040, 40, AMB)
     if 700 <= t < 900 and random.random() < .4: d.line((76, 14 + random.randint(0, 24), 150, 14 + random.randint(0, 24)), fill=DG)
+    made_by(d, 73, t)
     return im
 
 out = os.path.join(root, "docs", "ui"); os.makedirs(out, exist_ok=True)
 for name, fn in (("v1_glitch", v1), ("v2_bios", v2), ("v3_apertura", v3)):
-    ts = list(range(0, 1300, 40)); fr = [scan(fn(t)).resize((W * 4, H * 4), Image.NEAREST) for t in ts]
+    ts = [r * ANIM_MS // SPLASH_MS for r in range(0, SPLASH_MS + 1, 40)]   # fotogramas cada 40 ms reales
+    fr = [scan(fn(t)).resize((W * 4, H * 4), Image.NEAREST) for t in ts]
     fr[0].save(os.path.join(out, "splash_%s.gif" % name), save_all=True, append_images=fr[1:] + [fr[-1]] * 20, duration=40, loop=0)
-    pick = [0, 8, 12, 16, 20, 24, 28, 32]; sel = [scan(fn(ts[i])) for i in pick]
+    pick = [0, 12, 18, 24, 30, 36, 42, len(ts) - 1]; sel = [scan(fn(ts[i])) for i in pick]
     strip = Image.new("RGB", (W * 4 + 3 * 3, (H + 3) * 2 + 3), (40, 40, 40))
     for k, f in enumerate(sel): strip.paste(f, ((k % 4) * (W + 3), (k // 4) * (H + 3)))
     strip.resize((strip.width * 2, strip.height * 2), Image.NEAREST).save(os.path.join(out, "splash_%s_strip.png" % name))

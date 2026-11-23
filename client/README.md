@@ -77,6 +77,7 @@ riotkvm scroll -3
 riotkvm raw kd 0x04                   # orden cruda (depuración)
 riotkvm info ; riotkvm stats [--reset]   # versión/tiempos y contadores del firmware (etapa 1)
 riotkvm led auto | off | ff8800 [--brillo 60]   # luz del dongle (firmware 1.2.0+, se guarda en él); sin valor, la muestra; GUI: Ajustes > Luz
+riotkvm name [NUEVO]                            # nombre del dongle (firmware 1.3.0+, se guarda en él; es su nombre BLE, se le sigue buscando por UUID); GUI: Tools > Firmware del dongle
 riotkvm run macro.riotkvm [--dry-run]    # macros; '-' = stdin
 riotkvm bench -n 200                  # RTT de status
 riotkvm completion bash|zsh|fish|powershell|elvish

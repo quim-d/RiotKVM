@@ -43,6 +43,9 @@ pub enum Cmd {
     /// Luz del dongle (firmware 1.2.0+; persistente en el dongle). Se aplica en su sitio de la cola y se reenvía si el
     /// enlace se reconecta (lo último elegido en esta sesión). Respuesta: `Event::Led`.
     SetLed(crate::Led),
+    /// Renombra el dongle (firmware 1.3.0+; persistente). Respuesta: `Event::Name`; firmware viejo: `Event::Name(None)`
+    /// y `DeviceError` con [`crate::name::UNSUPPORTED`]. Sin enlace se descarta (la GUI solo lo ofrece conectada).
+    SetName(String),
     ReleaseAll,
     Quit,
 }
@@ -158,6 +161,8 @@ pub enum Event {
     /// Luz del dongle: el ajuste vigente (leído de `info` al conectar, o el recién aplicado). `None` = el firmware no
     /// admite control de la luz (anterior a 1.2.0).
     Led(Option<crate::Led>),
+    /// Nombre del dongle (leído de `info` al conectar, o el recién puesto). `None` = el firmware no admite renombrar.
+    Name(Option<String>),
 }
 
 pub type Connector = Box<dyn FnMut() -> Result<Box<dyn Transport>> + Send>;
@@ -257,7 +262,7 @@ fn apply(k: &mut Kvm, co: &mut MouseCoalescer, c: Cmd, opts: SessionOpts) -> Res
         Cmd::Repeat { .. } | Cmd::Paste(_) => Ok(()), // los trata `run` (necesitan eventos y cancelación)
         Cmd::Type(s) => k.type_text(&s, 0.0),
         Cmd::ReleaseAll => k.release_all(),
-        Cmd::SetOpts(_) | Cmd::SetLed(_) | Cmd::Quit | Cmd::MouseAbs { .. } | Cmd::MouseRel { .. } => Ok(()), // los trata `run`
+        Cmd::SetOpts(_) | Cmd::SetLed(_) | Cmd::SetName(_) | Cmd::Quit | Cmd::MouseAbs { .. } | Cmd::MouseRel { .. } => Ok(()), // los trata `run`
     }
 }
 
@@ -521,6 +526,9 @@ fn run(connect: &mut Connector, layout: &str, rx: Receiver<Cmd>, emit: &dyn Fn(E
                 if e.message() == crate::led::UNSUPPORTED {
                     emit(Event::Led(None));
                 }
+                if e.message() == crate::name::UNSUPPORTED {
+                    emit(Event::Name(None));
+                }
                 if is_link_error(&e) {
                     if !healing {
                         *failure = Some(e);
@@ -543,6 +551,7 @@ fn run(connect: &mut Connector, layout: &str, rx: Receiver<Cmd>, emit: &dyn Fn(E
                         Cmd::SetLed(l) => {
                             co.flush_into(k).and_then(|_| k.raw(&l.cmd())).map(|_| emit(Event::Led(Some(l))))
                         }
+                        Cmd::SetName(n) => co.flush_into(k).and_then(|_| k.set_name(&n)).map(|n| emit(Event::Name(Some(n)))),
                         other => apply(k, &mut co, other, opts),
                     };
                     if let Err(e) = r {
@@ -590,6 +599,7 @@ fn run(connect: &mut Connector, layout: &str, rx: Receiver<Cmd>, emit: &dyn Fn(E
                         let cur = crate::Led::from_info_reply(&r);
                         // BLE: INFO puede leerse antes de que el dongle procese SET_LED; vale lo enviado si lo admite
                         emit(Event::Led(if sent && cur.is_some() { led } else { cur }));
+                        emit(Event::Name(crate::name::renameable(&r)));
                     }
                     Err(e) if is_link_error(&e) && !healing => failure = Some(e),
                     Err(_) => {}
@@ -687,6 +697,8 @@ mod tests {
         assert!(matches!(ev, Event::Link(LinkState::Connected { .. })));
         let ev = s.events.recv_timeout(Duration::from_secs(20)).unwrap();
         assert_eq!(ev, Event::Led(Some(crate::Led::Auto)), "al conectar lee la luz de `info`");
+        let ev = s.events.recv_timeout(Duration::from_secs(20)).unwrap();
+        assert_eq!(ev, Event::Name(Some("RiotKVM".into())), "y el nombre");
         let ev = s.events.recv_timeout(Duration::from_secs(20)).unwrap();
         assert!(matches!(ev, Event::Status { host: true, hidready: true, .. }), "{ev:?}");
         s.send(Cmd::Key { usage: 0x04, down: true });
@@ -1149,6 +1161,40 @@ mod tests {
         sim.0.lock().unwrap().led = None;
         s.send(Cmd::SetLed(crate::Led::Off));
         wait_led(None);
+    }
+
+    /// Nombre: se lee al conectar, `SetName` lo aplica (y se ve en el nombre del enlace al reconectar) y un firmware
+    /// anterior a 1.3.0 da `Event::Name(None)` + el aviso de actualizar.
+    #[test]
+    fn set_name_reported_on_connect_and_old_firmware() {
+        let (s, sim, link) = sim_rig("us");
+        let wait_name = |want: Option<&str>| {
+            let t0 = Instant::now();
+            while t0.elapsed() < Duration::from_secs(20) {
+                if let Ok(Event::Name(n)) = s.events.recv_timeout(Duration::from_millis(50)) {
+                    if n.as_deref() == want {
+                        return;
+                    }
+                }
+            }
+            panic!("no llegó Event::Name({want:?})");
+        };
+        wait_name(Some("RiotKVM"));
+        s.send(Cmd::SetName("Rack3".into()));
+        wait_name(Some("Rack3"));
+        assert_eq!(sim.state().name.as_deref(), Some("Rack3"));
+        link.drop_link("reinicio simulado");
+        let t0 = Instant::now();
+        loop {
+            if let Ok(Event::Link(LinkState::Connected { name, .. })) = s.events.recv_timeout(Duration::from_millis(50)) {
+                assert_eq!(name, "Rack3", "el nombre del enlace sale de INFO");
+                break;
+            }
+            assert!(t0.elapsed() < Duration::from_secs(20), "no reconectó");
+        }
+        sim.0.lock().unwrap().name = None;
+        s.send(Cmd::SetName("Otro".into()));
+        wait_name(None);
     }
 
     fn sim_rig_opts(via_rel: bool) -> SimRig {

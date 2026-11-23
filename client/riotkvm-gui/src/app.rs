@@ -572,6 +572,7 @@ impl App {
             match e {
                 Event::Link(l) => {
                     dlog!("enlace: {l:?}");
+                    self.tools.on_link(l.is_connected());
                     if !l.is_connected() {
                         self.status = None;
                         self.rtt_us = None;
@@ -598,6 +599,7 @@ impl App {
                     self.note(msg, err);
                 }
                 Event::Led(l) => self.settings.on_led(l),
+                Event::Name(n) => self.tools.on_name(n),
                 Event::DeviceError(m) => {
                     dlog::bump(&ERRORS);
                     dlog!("ERROR del dongle: {m}");
@@ -1031,7 +1033,7 @@ impl eframe::App for App {
                     }
                 };
                 match &self.link {
-                    LinkState::Connected { name, .. } => tg(ui, theme::Tag::Ok, "ble", name, theme::MAGENTA),
+                    LinkState::Connected { name, .. } => tg(ui, theme::Tag::Ok, "ble", self.tools.dongle_name().unwrap_or(name), theme::MAGENTA),
                     LinkState::Searching => tg(ui, theme::Tag::Wait, "ble", &format!("scan ({})", self.opts.transport_desc), theme::AMBAR),
                     LinkState::Connecting => tg(ui, theme::Tag::Wait, "ble", "connecting", theme::AMBAR),
                     LinkState::Reconnecting { attempt, reason } => tg(ui, theme::Tag::Fail, "ble", &format!("retry {attempt}: {reason}"), theme::ROJO),
@@ -1188,6 +1190,9 @@ impl eframe::App for App {
             None => {}
         }
         self.tools.show(&ctx);
+        if let Some(n) = self.tools.take_rename() {
+            self.send(Cmd::SetName(n));
+        }
         if self.paste != paste_before {
             self.paste.save();
         }

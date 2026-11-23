@@ -13,6 +13,7 @@ pub mod keys;
 pub mod latency;
 pub mod layouts;
 pub mod led;
+pub mod name;
 pub mod protocol;
 pub mod rt;
 pub mod scancode;

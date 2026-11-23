@@ -15,9 +15,9 @@ pub const CMD_UUID: &str = "7d0d1000-9b6e-4b7a-8d3f-2a5c6e1f0002";
 pub const EVT_UUID: &str = "7d0d1000-9b6e-4b7a-8d3f-2a5c6e1f0003";
 /// INFO: read (versión, modo, capacidades).
 pub const INFO_UUID: &str = "7d0d1000-9b6e-4b7a-8d3f-2a5c6e1f0004";
-/// Nombre anunciado (solo informativo: se descubre por UUID de servicio, no por nombre).
-/// Nombre de anuncio actual (visible). El descubrimiento es por UUID de servicio, así que también se conecta a firmware
-/// anterior que anuncia `QKVM` o `QuimKVM` (ver `ADV_NAMES_ACCEPTED`).
+/// Nombre de anuncio de fábrica (solo informativo). Desde el firmware 1.3.0 el nombre es configurable (`riotkvm name`),
+/// así que el descubrimiento es SIEMPRE por UUID de servicio, nunca por nombre: también se conecta a un dongle renombrado
+/// o a un firmware anterior que anuncia `QKVM` o `QuimKVM` (ver `ADV_NAMES_ACCEPTED`).
 pub const ADV_NAME: &str = "RiotKVM";
 pub const ADV_NAMES_ACCEPTED: [&str; 3] = ["RiotKVM", "QKVM", "QuimKVM"];
 

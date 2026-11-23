@@ -122,6 +122,24 @@ impl Kvm {
         Ok(crate::Led::from_info_reply(&self.info()?))
     }
 
+    /// Nombre del dongle según `info`. `Ok(None)` = el firmware no admite renombrar (anterior a 1.3.0).
+    pub fn dongle_name(&mut self) -> Result<Option<String>> {
+        Ok(crate::name::renameable(&self.info()?))
+    }
+
+    /// Renombra el dongle (firmware 1.3.0+; persistente; el BLE re-anuncia con el nombre nuevo sin reiniciar). Valida el
+    /// nombre y comprueba antes con `info` que el firmware lo admita ([`crate::name::UNSUPPORTED`] si no). Serie: espera
+    /// el `ok`; BLE: SET_NAME sin respuesta, y los errores llegan por ERR al vaciar. Devuelve el nombre ya normalizado.
+    pub fn set_name(&mut self, name: &str) -> Result<String> {
+        let n = crate::name::validate(name)?;
+        if self.dongle_name()?.is_none() {
+            return Err(crate::Error::Device(crate::name::UNSUPPORTED.into()));
+        }
+        self.raw(&crate::name::cmd(&n))?;
+        self.t.flush()?;
+        Ok(n)
+    }
+
     /// Contadores del dongle (dos líneas: HID y SD) o `reset`.
     pub fn stats(&mut self, reset: bool) -> Result<String> {
         self.raw(&P::stats(reset))

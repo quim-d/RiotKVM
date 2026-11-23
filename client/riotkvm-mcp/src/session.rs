@@ -90,6 +90,9 @@ pub struct Session {
     kvm: Option<Kvm>,
     lock: Option<File>,
     link: String,
+    /// Nombre del dongle conectado (leído de `info` al conectar; `None` si su firmware no lo publica). Solo lectura:
+    /// renombrar NO se expone al LLM (la orden `name` tampoco está en `RAW_ALLOWED`).
+    name: Option<String>,
     video: Option<Video>,
     video_idle: Duration,
     /// Tamaño de la última captura ENVIADA al modelo: las coordenadas de `mouse.move` están en este espacio.
@@ -194,6 +197,7 @@ impl Session {
             kvm: None,
             lock: None,
             link: "desconectado".into(),
+            name: None,
             video: None,
             video_idle: Duration::from_secs(env("VIDEO_IDLE").and_then(|v| v.parse().ok()).unwrap_or(VIDEO_IDLE_DEFAULT)),
             view: None,
@@ -213,8 +217,9 @@ impl Session {
 
     /// Sesión con un `Kvm` ya abierto (tests con `MockTransport`).
     #[cfg(test)]
-    pub fn with_kvm_for_test(kvm: Kvm) -> Session {
+    pub fn with_kvm_for_test(mut kvm: Kvm) -> Session {
         let mut s = Session::new();
+        s.name = kvm.dongle_name().ok().flatten();
         s.kvm = Some(kvm);
         s.link = "mock".into();
         s.target = Some(TargetOs::Windows);
@@ -280,12 +285,15 @@ impl Session {
                     n if n.to_lowercase().contains("ble") => format!("BLE ({n})"),
                     n => format!("serie ({n})"),
                 };
-                Ok((Kvm::new(t, &self.layout).map_err(kerr)?, link))
+                let mut k = Kvm::new(t, &self.layout).map_err(kerr)?;
+                let name = k.dongle_name().ok().flatten();
+                Ok((k, link, name))
             });
             match opened {
-                Ok((k, link)) => {
+                Ok((k, link, name)) => {
                     self.kvm = Some(k);
                     self.link = link;
+                    self.name = name;
                     self.abs_known = false;
                 }
                 Err(e) => {
@@ -320,6 +328,7 @@ impl Session {
         }
         self.lock = None;
         self.link = "desconectado".into();
+        self.name = None;
     }
 
     /// Al terminar cada `execute`: nada se queda pulsado.
@@ -402,6 +411,7 @@ impl Session {
             "connection" => Ok(json!({
                 "connected": self.kvm.is_some(),
                 "link": self.link,
+                "name": self.name,
                 "port": self.port.clone().unwrap_or_else(|| "auto (BLE si anuncia, si no serie)".into()),
                 "layout": self.layout,
                 "targetOs": self.target_json(),
@@ -411,6 +421,7 @@ impl Session {
             "status" => {
                 let mut m: Map<String, Value> = self.with_kvm(|k| k.status())?;
                 m.insert("link".into(), json!(self.link));
+                m.insert("name".into(), json!(self.name));
                 m.insert("layout".into(), json!(self.layout));
                 Ok(Value::Object(m))
             }
