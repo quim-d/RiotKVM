@@ -259,6 +259,15 @@ impl Transport for BleTransport {
         self.tx.send(Inbox::Ping(r)).map_err(|_| Error::Transport("hilo BLE terminado".into()))?;
         rx.recv_timeout(self.opts.reply_timeout + Duration::from_secs(1)).map_err(|_| Error::Transport("sin pong BLE".into()))?
     }
+
+    fn ping_nowait(&mut self) -> Result<()> {
+        if !self.shared.state.lock().unwrap().is_connected() {
+            return Err(self.down());
+        }
+        // el hilo BLE publica el RTT como evento al llegar el pong; la respuesta por canal se descarta
+        let (r, _) = channel();
+        self.tx.send(Inbox::Ping(r)).map_err(|_| Error::Transport("hilo BLE terminado".into()))
+    }
 }
 
 impl Drop for BleTransport {
@@ -779,6 +788,25 @@ mod tests {
         let evs = t.poll_events();
         assert!(evs.contains(&TEvent::StatusLine("host=1 leds=0x01".into())), "{evs:?}");
         assert!(evs.iter().any(|e| matches!(e, TEvent::Rtt(_))));
+    }
+
+    /// `ping_nowait` vuelve sin esperar al pong (aunque tarde) y el RTT llega igualmente como evento.
+    #[test]
+    fn ping_nowait_does_not_block_and_rtt_arrives_as_event() {
+        let d = MockDongle::new(); // sin respondedor: el pong no llega solo (un `ping()` esperaría hasta el plazo)
+        let mut t = open(&d);
+        let t0 = Instant::now();
+        t.ping_nowait().unwrap();
+        assert!(t0.elapsed() < Duration::from_millis(500), "ping_nowait esperó {:?}", t0.elapsed());
+        wait(|| d.writes().iter().any(|w| w[0] == b'p'));
+        let _ = t.poll_events();
+        // el dongle contesta tarde (primer ping = secuencia 1): el RTT aparece en los eventos
+        d.notify(&[b"P".as_slice(), &1u32.to_le_bytes()].concat());
+        let t1 = Instant::now();
+        while !t.poll_events().iter().any(|e| matches!(e, TEvent::Rtt(_))) {
+            assert!(t1.elapsed() < Duration::from_secs(20), "no llegó el RTT");
+            std::thread::sleep(Duration::from_millis(5));
+        }
     }
 
     #[test]

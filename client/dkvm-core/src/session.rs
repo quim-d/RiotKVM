@@ -474,7 +474,7 @@ fn run(connect: &mut Connector, layout: &str, rx: Receiver<Cmd>, emit: &dyn Fn(E
                 next_poll = Instant::now() + Duration::from_secs(1);
                 if healing {
                     // BLE: ping con secuencia (RTT) y, tras (re)conectar, una lectura de estado
-                    let _ = k.t.ping();
+                    let _ = k.t.ping_nowait(); // sin esperar el pong: el RTT llega como evento y la entrada no se frena
                     if need_status {
                         if let Ok(m) = k.raw(&crate::protocol::status()) {
                             if let Some(e) = status_event(&m) {
