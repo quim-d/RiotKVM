@@ -176,7 +176,16 @@ impl Settings {
                 compat = Compat { os: None, via_rel: v }; // se muestra lo que de verdad está en uso (no se guarda)
             }
         }
-        Settings { open: false, tab: Tab::Target, compat, env_note: env, light: Light::new(Led::load_saved().unwrap_or(Led::Auto)) }
+        // (pruebas/capturas) RIOTKVM_GUI_SETTINGS=target|keyboard|light|lang|info abre la ventana en esa pestaña
+        let tab = match riotkvm_core::config::env("GUI_SETTINGS").as_deref() {
+            Some("keyboard") => Some(Tab::Keyboard),
+            Some("light") => Some(Tab::Light),
+            Some("lang") => Some(Tab::Lang),
+            Some("info") => Some(Tab::Info),
+            Some(_) => Some(Tab::Target),
+            None => None,
+        };
+        Settings { open: tab.is_some(), tab: tab.unwrap_or(Tab::Target), compat, env_note: env, light: Light::new(Led::load_saved().unwrap_or(Led::Auto)) }
     }
 
     /// Luz reportada por la sesión (`Event::Led`): el estado real del dongle, o `None` si su firmware no la admite.
