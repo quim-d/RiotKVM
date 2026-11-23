@@ -37,7 +37,8 @@ pub enum FwCmd {
 pub enum SdCmd {
     /// Discos externos/extraíbles candidatos (el dongle en modo A/C sale como «QKVM SD Ventoy»).
     List,
-    /// BORRA el disco y escribe Ventoy (MBR: arranca en BIOS legacy y UEFI) con la partición exFAT «Ventoy».
+    /// BORRA el disco y escribe Ventoy (MBR: arranca en BIOS legacy y UEFI) con la partición exFAT «Ventoy», el
+    /// tema QKVM, ventoy.json (menú en árbol) y la carpeta /Tools vacía. Las ISO las copias tú.
     Ventoy {
         /// Disco (`disk6` en macOS, `sdb` en Linux; ver `dkvm sd list`).
         #[arg(long, required_unless_present = "image", conflicts_with = "image")]
@@ -48,6 +49,9 @@ pub enum SdCmd {
         /// No pedir que se teclee el identificador del disco para confirmar.
         #[arg(long)]
         yes: bool,
+        /// Sin el tema QKVM (queda el de Ventoy; ventoy.json y /Tools se crean igual).
+        #[arg(long)]
+        no_theme: bool,
     },
 }
 
@@ -199,7 +203,8 @@ pub fn sd(app: &mut App, cmd: &SdCmd) -> Result<i32> {
             }
             Ok(0)
         }
-        SdCmd::Ventoy { disk, image, yes } => {
+        SdCmd::Ventoy { disk, image, yes, no_theme } => {
+            let files = ventoy::theme::sd_files(!no_theme);
             let rep = CliRep::new(app);
             let cancel = Cancel::new();
             let mut dev: rawdev::FileDev;
@@ -238,10 +243,10 @@ pub fn sd(app: &mut App, cmd: &SdCmd) -> Result<i32> {
                 disks::unmount(&d).map_err(ferr)?;
                 dev = rawdev::open_device(&d.raw_path, d.size).map_err(ferr)?;
                 target_desc = d.id.clone();
-                return write_ventoy(app, &mut dev, &pkg, &target_desc, &rep, &cancel);
+                return write_ventoy(app, &mut dev, &pkg, &files, &target_desc, &rep, &cancel);
             }
             let pkg = ventoy::package::load(&rep, &cancel).map_err(ferr)?;
-            write_ventoy(app, &mut dev, &pkg, &target_desc, &rep, &cancel)
+            write_ventoy(app, &mut dev, &pkg, &files, &target_desc, &rep, &cancel)
         }
     }
 }
@@ -251,13 +256,13 @@ fn dev_size(d: &rawdev::FileDev) -> u64 {
     d.size()
 }
 
-fn write_ventoy(app: &mut App, dev: &mut rawdev::FileDev, pkg: &ventoy::Package, target: &str, rep: &CliRep, cancel: &Cancel) -> Result<i32> {
+fn write_ventoy(app: &mut App, dev: &mut rawdev::FileDev, pkg: &ventoy::Package, files: &[(String, Vec<u8>)], target: &str, rep: &CliRep, cancel: &Cancel) -> Result<i32> {
     let rnd = ventoy::Randomness::new().map_err(ferr)?;
-    let p = ventoy::install(dev, pkg, &rnd, rep, cancel).map_err(ferr)?;
-    ventoy::verify(dev, pkg, &rnd, rep).map_err(ferr)?;
+    let p = ventoy::install(dev, pkg, &rnd, files, rep, cancel).map_err(ferr)?;
+    ventoy::verify(dev, pkg, &rnd, files, rep).map_err(ferr)?;
     app.emit(
         json!({"target": target, "ventoy": ventoy::VERSION, "part1": [p.part1_start, p.part1_end], "part2": [p.part2_start, p.part2_end], "cluster_bytes": p.cluster_sectors * 512, "verified": true}),
-        Some(format!("Ventoy {} escrito y verificado en {target} (exFAT «Ventoy» sectores {}-{}, VTOYEFI {}-{}). Copia las ISO a la partición «Ventoy».", ventoy::VERSION, p.part1_start, p.part1_end, p.part2_start, p.part2_end)),
+        Some(format!("Ventoy {} escrito y verificado en {target} (exFAT «Ventoy» sectores {}-{}, VTOYEFI {}-{}). Copia tus ISOs a la SD: instaladores en la raíz, herramientas en /Tools.", ventoy::VERSION, p.part1_start, p.part1_end, p.part2_start, p.part2_end)),
     );
     Ok(0)
 }
