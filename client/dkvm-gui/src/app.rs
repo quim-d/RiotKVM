@@ -1045,15 +1045,15 @@ impl eframe::App for App {
                     }
                 };
                 match &self.link {
-                    LinkState::Connected { name, mtu } => tg(ui, theme::Tag::Ok, "ble", &format!("linked {name}{}", if *mtu > 0 { format!(" mtu {mtu}") } else { String::new() }), theme::MAGENTA),
+                    LinkState::Connected { name, .. } => tg(ui, theme::Tag::Ok, "ble", name, theme::MAGENTA),
                     LinkState::Searching => tg(ui, theme::Tag::Wait, "ble", &format!("scan ({})", self.opts.transport_desc), theme::AMBAR),
                     LinkState::Connecting => tg(ui, theme::Tag::Wait, "ble", "connecting", theme::AMBAR),
                     LinkState::Reconnecting { attempt, reason } => tg(ui, theme::Tag::Fail, "ble", &format!("retry {attempt}: {reason}"), theme::ROJO),
                 }
                 match &self.status {
                     Some((host, hid, leds, sd, mode, boot)) => {
-                        tg(ui, if *host { theme::Tag::Ok } else { theme::Tag::Wait }, "usb", if *host { "host" } else { "wait" }, theme::CIAN);
-                        tg(ui, if *hid { theme::Tag::Ok } else if mode.as_deref() == Some("A") { theme::Tag::Na } else { theme::Tag::Wait }, "hid", if *hid { "ready" } else { "" }, theme::CIAN);
+                        tg(ui, if *host { theme::Tag::Ok } else { theme::Tag::Wait }, "usb", if *host { "" } else { "wait" }, theme::CIAN);
+                        tg(ui, if *hid { theme::Tag::Ok } else if mode.as_deref() == Some("A") { theme::Tag::Na } else { theme::Tag::Wait }, "hid", "", theme::CIAN);
                         tg(ui, if *sd { theme::Tag::Ok } else if mode.as_deref() == Some("B") { theme::Tag::Na } else { theme::Tag::Fail }, "sd", if *sd { "" } else { "no card" }, theme::ROJO);
                         if *boot {
                             ui.label(egui::RichText::new("BIOS (ratón no disponible)").color(theme::AMBAR));
@@ -1067,20 +1067,30 @@ impl eframe::App for App {
                         tg(ui, theme::Tag::Wait, "usb", "?", theme::AMBAR);
                     }
                 }
-                if let Some(rtt) = self.rtt_us {
-                    ui.label(format!("RTT {:.1} ms", rtt as f64 / 1000.0));
-                }
+                // línea compacta; el detalle (latencias, edad del cuadro, contadores) va en el tooltip
+                ui.separator();
+                let rtt = self.rtt_us.map(|r| format!(" · {:.0} ms", r as f64 / 1000.0)).unwrap_or_default();
+                let errs = ERRORS.load(Relaxed);
                 let ws = dkvm_core::latency::snapshot();
-                if ws.writes > 0 {
-                    ui.label(format!("evento→write p50 {:.1} p99 {:.1} ms (n {}) · write {:.2} ms", ws.ev_p50_ms, ws.ev_p99_ms, ws.ev_n, ws.write_avg_ms));
+                let mut det = format!(
+                    "vídeo {}x{} · edad {:.1}→{:.1} ms · dec {:.1} ms · descartados {}\nenviado: teclas {} · clics {} · mov {} · err {} · hook {} (vio {})",
+                    self.vsize.0, self.vsize.1, self.age_ms, self.age_end_ms, self.dec_ms,
+                    self.video.latest.dropped.load(std::sync::atomic::Ordering::Relaxed),
+                    KEYS.load(Relaxed), BUTTONS.load(Relaxed), MOVES.load(Relaxed), errs, if self.hook_ok { "ok" } else { "NO" }, dlog::HOOK_SEEN.load(Relaxed)
+                );
+                if let Some(r) = self.rtt_us {
+                    det.push_str(&format!("\nRTT {:.1} ms", r as f64 / 1000.0));
                 }
-                ui.separator();
-                ui.label(format!("{}x{} {:.0} fps  edad {:.1}→{:.1} ms  dec {:.1} ms  descartados {}", self.vsize.0, self.vsize.1, self.fps, self.age_ms, self.age_end_ms, self.dec_ms, self.video.latest.dropped.load(std::sync::atomic::Ordering::Relaxed)));
-                ui.separator();
-                ui.label(egui::RichText::new(format!("enviado: teclas {} · clics {} · mov {} · err {} · hook {} (vio {})", KEYS.load(Relaxed), BUTTONS.load(Relaxed), MOVES.load(Relaxed), ERRORS.load(Relaxed), if self.hook_ok { "ok" } else { "NO" }, dlog::HOOK_SEEN.load(Relaxed))).weak());
+                if ws.writes > 0 {
+                    det.push_str(&format!("\nevento→write p50 {:.1} p99 {:.1} ms (n {}) · write {:.2} ms", ws.ev_p50_ms, ws.ev_p99_ms, ws.ev_n, ws.write_avg_ms));
+                }
+                ui.label(format!("{}p {:.0} fps{rtt}", self.vsize.1, self.fps)).on_hover_text(det);
+                if errs > 0 {
+                    ui.colored_label(theme::ROJO, format!("err {errs}"));
+                }
                 if !self.captured {
                     ui.separator();
-                    ui.label("clic en el vídeo para capturar");
+                    ui.label(egui::RichText::new("clic para capturar").color(theme::GRIS));
                 }
                 if let Some((m, t, err)) = &self.note {
                     if t.elapsed() < Duration::from_secs(25) {
