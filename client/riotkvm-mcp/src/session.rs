@@ -415,6 +415,23 @@ impl Session {
                 Ok(Value::Object(m))
             }
             "info" => Ok(json!(self.with_kvm(|k| k.info())?)),
+            "led" => {
+                let want = match s(a, "value") {
+                    None => None,
+                    Some(v) => Some(match (riotkvm_core::Led::parse(v).map_err(kerr)?, f(a, "brightness")) {
+                        (riotkvm_core::Led::Color { rgb, .. }, Some(br)) if (0.0..=100.0).contains(&br) => riotkvm_core::Led::Color { rgb, bright: br.round() as u8 },
+                        (riotkvm_core::Led::Color { .. }, Some(br)) => return Err(format!("[uso] brightness fuera de rango (0..100): {br}")),
+                        (l, _) => l,
+                    }),
+                };
+                let cur = self.with_kvm(|k| {
+                    if let Some(l) = want {
+                        k.set_led(l)?;
+                    }
+                    k.led()?.ok_or_else(|| riotkvm_core::Error::Device(riotkvm_core::led::UNSUPPORTED.into()))
+                })?;
+                Ok(json!(want.unwrap_or(cur).to_string()))
+            }
             "disconnect" => {
                 self.drop_kvm();
                 Ok(json!(true))

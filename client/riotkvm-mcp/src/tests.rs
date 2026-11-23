@@ -309,3 +309,18 @@ fn sandbox_linea_del_error_en_el_codigo_del_modelo() {
     let e = run_js("null.x").error.unwrap();
     assert!(e.contains("línea 1"), "{e}");
 }
+
+#[test]
+fn led_lee_cambia_y_valida() {
+    let (mut s, h) = mock_session(0);
+    assert_eq!(s.call("led", &json!({})).unwrap(), json!("auto"));
+    assert_eq!(s.call("led", &json!({"value": "ff8800", "brightness": 60})).unwrap(), json!("FF8800@60"));
+    assert!(h.lock().sent.iter().any(|l| l == "led FF8800 60"));
+    assert_eq!(s.call("led", &json!({"value": "off"})).unwrap(), json!("off"));
+    assert!(s.call("led", &json!({"value": "rojo"})).unwrap_err().starts_with("[uso]"));
+    assert!(s.call("led", &json!({"value": "ff0000", "brightness": 101})).unwrap_err().starts_with("[uso]"));
+    // firmware anterior a 1.2.0: `err unknown`
+    h.lock().fail_next = Some("err unknown".into());
+    let e = s.call("led", &json!({"value": "auto"})).unwrap_err();
+    assert!(e.contains("actualízalo"), "{e}");
+}

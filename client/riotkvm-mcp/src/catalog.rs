@@ -27,6 +27,7 @@ declare const riotkvm: {
   connection(): { connected: boolean; link: string; port: string; layout: string; video: string | null; coordSpace: [number, number] | null }; // no conecta
   status(): Record<string, string | number | boolean>; // conecta si hace falta. host=servidor enumeró el USB, hidready, proto (boot = BIOS), leds (bit0 NumLock, bit1 CapsLock), mode (A/B/C), link
   info(): string;                                   // versión de firmware del dongle
+  led(value?: "auto" | "off" | string /*RRGGBB*/, o?: { brightness?: number /*0..100, defecto 35*/ }): string; // luz del dongle (firmware 1.2.0+); sin args la lee. Devuelve "auto" | "off" | "RRGGBB@NN"
   screenshot(o?: { maxWidth?: number /*1280, máx. 1568*/; format?: "jpeg" | "png"; quality?: number /*75*/; settleMs?: number /*250: espera antes de capturar*/ }):
     { width: number; height: number; sourceWidth: number; sourceHeight: number; source: string; image: number };
   type(text: string, o?: { enter?: boolean; delay?: number /*s entre caracteres*/; fw?: boolean }): { typed: number }; // layout del SERVIDOR (ñ, @, acentos OK); máx. 8192 caracteres
@@ -94,6 +95,7 @@ const riotkvm = {
   connection: () => __call("connection"),
   status: () => __call("status"),
   info: () => __call("info"),
+  led: (value, o) => __call("led", Object.assign(value === undefined ? {} : { value: String(value) }, o || {})),
   disconnect: () => __call("disconnect"),
   setLayout: name => __call("setLayout", { name }),
   setTargetOs: os => __call("setTargetOs", { os: String(os) }),
@@ -159,7 +161,7 @@ pub const CATALOG: &str = r#"[
 {"id":"screen-reading","kind":"doc","title":"Capturas de pantalla: resolución, calidad y fiabilidad","tags":["screenshot","captura","pantalla","video","capturadora","ms2109","negro","resolucion","ocr"],
 "text":"riotkvm.screenshot() abre la capturadora la primera vez (~1-3 s) y la mantiene encendida hasta 20 s sin uso (RIOTKVM_MCP_VIDEO_IDLE). Espera settleMs (250 por defecto) y devuelve el primer cuadro posterior, reescalado a maxWidth (1280 por defecto) en JPEG calidad 75.\nTexto pequeño (BIOS, consola 1080p): usa maxWidth 1568 (el máximo) o format 'png' para leerlo mejor. Para ahorrar contexto: maxWidth 800.\nHasta 6 capturas y ~4 MB por execute. Si necesitas ver la evolución de una carga larga, mejor varias llamadas a execute con sleeps.\nNegro total: servidor apagado, en reposo, sin señal en esa salida HDMI, o resolución no soportada por la capturadora. Barras de colores: la capturadora no recibe señal. 'patrón de prueba' en source: no es la pantalla real (RIOTKVM_MCP_VIDEO=pattern)."},
 {"id":"api-overview","kind":"api","title":"API riotkvm (resumen)","tags":["api","riotkvm","qkvm","funciones","referencia"],
-"text":"connection(), status(), info(), screenshot({maxWidth, format, quality, settleMs}), type(text, {enter, delay, fw}), key(...combos, {hold}), keyDown(c), keyUp(c), releaseAll(), mouse.move(x,y), mouse.click(x?,y?,{button,count}), mouse.doubleClick(x,y), mouse.rightClick(x,y), mouse.down(b), mouse.up(b), mouse.scroll(n), mouse.moveAbs(x,y), mouse.moveRel(dx,dy), setLayout(name), setTargetOs(os), sleep(s), raw(line), disconnect(), video.devices(), video.stop(). Globales: console.log, sleep(ms), setTimeout (síncrono). Todo es síncrono; await es opcional. qkvm es alias de riotkvm."},
+"text":"connection(), status(), info(), screenshot({maxWidth, format, quality, settleMs}), type(text, {enter, delay, fw}), key(...combos, {hold}), keyDown(c), keyUp(c), releaseAll(), mouse.move(x,y), mouse.click(x?,y?,{button,count}), mouse.doubleClick(x,y), mouse.rightClick(x,y), mouse.down(b), mouse.up(b), mouse.scroll(n), mouse.moveAbs(x,y), mouse.moveRel(dx,dy), setLayout(name), setTargetOs(os), led(value, {brightness}), sleep(s), raw(line), disconnect(), video.devices(), video.stop(). Globales: console.log, sleep(ms), setTimeout (síncrono). Todo es síncrono; await es opcional. qkvm es alias de riotkvm."},
 {"id":"api-type","kind":"api","title":"riotkvm.type(text, {enter, delay, fw})","tags":["api","type","escribir","texto"],
 "text":"Escribe texto en el servidor usando el layout configurado (setLayout). enter:true añade Enter al final. delay: segundos entre caracteres (útil en BIOS o consolas lentas que pierden teclas: 0.02-0.05). fw:true usa el tecleo del firmware (US, solo ASCII). Máximo 8192 caracteres por llamada; se teclea en trozos y se corta si vence timeoutSeconds (el error dice cuántos se teclearon). Saltos de línea '\\n' = Enter, '\\t' = Tab. Devuelve {typed}."},
 {"id":"api-key","kind":"api","title":"riotkvm.key(...combos, {hold}) / keyDown / keyUp / releaseAll","tags":["api","key","pulsar","combo","mantener"],
@@ -170,4 +172,7 @@ pub const CATALOG: &str = r#"[
 "text":"Captura la pantalla del servidor (capturadora HDMI) y la adjunta al resultado como imagen. Devuelve {width, height, sourceWidth, sourceHeight, source, image}. Las coordenadas del ratón pasan a ser las de esta imagen. Opciones: maxWidth 160..1568 (1280), format 'jpeg'|'png', quality 30..95 (75), settleMs 0..5000 (250)."},
 {"id":"api-status","kind":"api","title":"riotkvm.status() / connection() / info() / raw()","tags":["api","status","estado","info","raw","diagnostico","leds","capslock"],
 "text":"connection(): sin tocar el dongle, dice si hay conexión, el enlace, layout, vídeo y espacio de coordenadas. status(): conecta y devuelve el estado del dongle: host (servidor enumeró el USB), hidready, susp (servidor suspendido), proto (boot = BIOS/boot protocol, report = SO), leds (bit0 NumLock, bit1 CapsLock: útil para saber si CapsLock está activo antes de escribir contraseñas), sd, mode (A/B/C), link, layout. info(): firmware. raw(line): orden cruda, solo lista blanca: kd ku kall mm ma mbr mba status info type (por BLE solo existen esas); stats, heap y log solo responden por serie (dongle enchufado por cable al portátil). Nada que reinicie el dongle, cambie de modo o toque el BLE."}
+,
+{"id":"api-led","kind":"api","title":"riotkvm.led(value, {brightness})","tags":["api","led","luz","color","brillo","dongle"],
+"text":"Luz RGB del propio dongle (no del servidor). led() la lee; led('auto') = color según estado (modo, BLE, fallo de SD; de fábrica); led('off') la apaga; led('ff8800', {brightness: 60}) color fijo RRGGBB con brillo 0..100 (defecto 35). Se guarda en el dongle (persiste tras reiniciar). Devuelve 'auto' | 'off' | 'RRGGBB@NN'. Firmware anterior a 1.2.0: error [dongle] 'el firmware no admite control de la luz: actualízalo'. Solo cámbiala si el usuario lo pide."}
 ]"#;
