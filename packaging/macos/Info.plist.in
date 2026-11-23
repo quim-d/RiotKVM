@@ -3,9 +3,9 @@
 <plist version="1.0">
 <dict>
     <key>CFBundleName</key>
-    <string>QKVM</string>
+    <string>RiotKVM</string>
     <key>CFBundleDisplayName</key>
-    <string>QKVM</string>
+    <string>RiotKVM</string>
     <key>CFBundleIdentifier</key>
     <string>io.github.quim-dkvm.gui</string>
     <key>CFBundleExecutable</key>
@@ -21,10 +21,10 @@
     <key>NSHighResolutionCapable</key>
     <true/>
     <key>NSCameraUsageDescription</key>
-    <string>QKVM muestra el vídeo de la capturadora HDMI (o de la cámara que elijas) para controlar el servidor.</string>
+    <string>RiotKVM muestra el vídeo de la capturadora HDMI (o de la cámara que elijas) para controlar el servidor.</string>
     <key>NSBluetoothAlwaysUsageDescription</key>
-    <string>QKVM se conecta por Bluetooth Low Energy al dongle QKVM para enviar teclado y ratón al servidor.</string>
+    <string>RiotKVM se conecta por Bluetooth Low Energy al dongle RiotKVM para enviar teclado y ratón al servidor.</string>
     <key>NSBluetoothPeripheralUsageDescription</key>
-    <string>QKVM se conecta por Bluetooth Low Energy al dongle QKVM para enviar teclado y ratón al servidor.</string>
+    <string>RiotKVM se conecta por Bluetooth Low Energy al dongle RiotKVM para enviar teclado y ratón al servidor.</string>
 </dict>
 </plist>

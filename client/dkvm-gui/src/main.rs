@@ -217,7 +217,7 @@ fn main() -> eframe::Result {
     };
     let layout = dkvm_core::config::effective_layout(a.layout.as_deref());
     let layout = dkvm_core::layouts::canonical(&layout).unwrap_or("es").to_string();
-    let mut vb = eframe::egui::ViewportBuilder::default().with_title("QKVM - KVM de bolsillo").with_inner_size([1100.0, 700.0]);
+    let mut vb = eframe::egui::ViewportBuilder::default().with_title("RiotKVM - KVM de bolsillo").with_inner_size([1100.0, 700.0]);
     if let Ok(img) = image::load_from_memory(include_bytes!("../assets/skull_64.png")) {
         let img = img.to_rgba8();
         let (w, h) = img.dimensions();

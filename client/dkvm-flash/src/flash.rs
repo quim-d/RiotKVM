@@ -290,7 +290,7 @@ pub fn run(image: &[u8], kind: ImageKind, opts: &FlashOptions, rep: &dyn Reporte
                 }
             }
             Pick::Nothing => {
-                rep.log(&format!("no hay ningún dongle QKVM ni ROM Espressif. {BOOT_HELP}"));
+                rep.log(&format!("no hay ningún dongle RiotKVM ni ROM Espressif. {BOOT_HELP}"));
                 wait_for("esperando el dongle con BOOT pulsado (VID 303A)", opts.wait_rom, rep, cancel, only_espressif)?.ok_or_else(|| Error::msg(format!("no aparece el modo descarga (VID 303A). {BOOT_HELP}")))?
             }
         },

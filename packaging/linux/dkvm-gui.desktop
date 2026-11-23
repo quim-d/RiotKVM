@@ -1,8 +1,8 @@
 [Desktop Entry]
 Type=Application
-Name=QKVM
+Name=RiotKVM
 GenericName=KVM de bolsillo
-Comment=Vídeo de la capturadora HDMI y teclado/ratón hacia el dongle QKVM
+Comment=Vídeo de la capturadora HDMI y teclado/ratón hacia el dongle RiotKVM
 Exec=dkvm-gui
 Icon=video-display
 Terminal=false
