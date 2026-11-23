@@ -77,10 +77,12 @@ impl PasteChord {
             PasteChord::CtrlShiftInsert => "Ctrl+Shift+Insert",
         }
     }
+    #[cfg_attr(not(windows), allow(dead_code))] // solo lo usa el hook de Windows
     fn code(self) -> u8 {
         self as u8
     }
     /// (vk, máscara de modificadores: 1 ctrl, 2 shift, 4 alt)
+    #[cfg_attr(not(windows), allow(dead_code))]
     pub fn vk_mods(self) -> Option<(u32, u8)> {
         match self {
             PasteChord::Off => None,
@@ -101,6 +103,7 @@ impl PasteChord {
 }
 
 /// vk + scancode + flag extendido -> uso HID (Pausa se identifica por vk porque su scancode es especial).
+#[cfg_attr(not(windows), allow(dead_code))] // hook de Windows (y sus pruebas)
 pub fn translate(vk: u32, sc: u32, ext: bool) -> Option<u8> {
     if vk == 0x13 {
         return Some(0x48);

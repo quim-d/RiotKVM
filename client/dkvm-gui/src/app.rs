@@ -609,8 +609,9 @@ impl App {
     fn upload_video(&mut self, ctx: &egui::Context) {
         let Some(f) = self.video.latest.take() else { return };
         let Frame { w, h, rgba, arrived, decode, .. } = f;
-        // una sola copia (memcpy) RGBA -> Color32; con alfa 255 premultiplicado = sin premultiplicar
-        let pixels: Vec<Color32> = bytemuck::pod_collect_to_vec(&rgba);
+        // RGBA -> Color32 SIN copia (mismo búfer: alineación 1 y longitud múltiplo de 4); con alfa 255 premultiplicado =
+        // sin premultiplicar. Solo si el búfer no encaja (no debería) se copia.
+        let pixels: Vec<Color32> = bytemuck::allocation::try_cast_vec(rgba).unwrap_or_else(|(_, v)| bytemuck::pod_collect_to_vec(&v));
         let img = egui::ColorImage::new([w as usize, h as usize], pixels);
         match &mut self.tex {
             Some(t) => t.set(img, TextureOptions::LINEAR),

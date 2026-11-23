@@ -259,6 +259,15 @@ impl Transport for BleTransport {
         self.tx.send(Inbox::Ping(r)).map_err(|_| Error::Transport("hilo BLE terminado".into()))?;
         rx.recv_timeout(self.opts.reply_timeout + Duration::from_secs(1)).map_err(|_| Error::Transport("sin pong BLE".into()))?
     }
+
+    fn ping_nowait(&mut self) -> Result<()> {
+        if !self.shared.state.lock().unwrap().is_connected() {
+            return Err(self.down());
+        }
+        // el hilo BLE publica el RTT como evento al llegar el pong; la respuesta por canal se descarta
+        let (r, _) = channel();
+        self.tx.send(Inbox::Ping(r)).map_err(|_| Error::Transport("hilo BLE terminado".into()))
+    }
 }
 
 impl Drop for BleTransport {
@@ -282,14 +291,13 @@ struct Waiting {
 }
 
 /// Hilo del enlace: conectar -> servir -> (perdido) -> esperar -> conectar...
-#[allow(unused_assignments)]
+#[allow(unused_assignments)] // `write_buf!` reinicia estado que en algunas expansiones ya no se vuelve a leer
 fn link_thread(mut connector: Box<dyn GattConnector>, mut codec: Box<dyn Codec>, opts: BleOptions, rx: Receiver<Inbox>, tx: Sender<Inbox>, sh: Arc<Shared>) {
     crate::rt::boost_current_thread();
     let mut attempt = 0u32;
     let mut seq = 0u32;
     'outer: loop {
         // ---- conectar
-        let mut last_reason = String::new();
         let link = loop {
             // atender órdenes de cierre mientras no hay enlace; el resto se descarta (no se acumula entrada vieja)
             loop {
@@ -313,8 +321,7 @@ fn link_thread(mut connector: Box<dyn GattConnector>, mut codec: Box<dyn Codec>,
                 Ok(l) => break l,
                 Err(e) => {
                     attempt += 1;
-                    last_reason = e.message().to_string();
-                    set_state(&sh, LinkState::Reconnecting { attempt, reason: last_reason.clone() });
+                    set_state(&sh, LinkState::Reconnecting { attempt, reason: e.message().to_string() });
                     let wait = opts.backoff.get((attempt as usize - 1).min(opts.backoff.len().saturating_sub(1))).copied().unwrap_or(Duration::from_secs(1));
                     // espera interrumpible por Close
                     let t0 = Instant::now();
@@ -333,7 +340,6 @@ fn link_thread(mut connector: Box<dyn GattConnector>, mut codec: Box<dyn Codec>,
                 }
             }
         };
-        let _ = last_reason;
         let mut link = link;
         // compatibilidad de protocolo: se lee INFO antes de dar el enlace por bueno
         if let Ok(info) = link.read_info() {
@@ -429,7 +435,9 @@ fn link_thread(mut connector: Box<dyn GattConnector>, mut codec: Box<dyn Codec>,
                         if let Err(e) = link.write_cmd(&buf) {
                             break 'serve e.message().to_string();
                         }
-                        last_write = Instant::now();
+                        // el hueco se cuenta desde que EMPIEZA la escritura: con respuesta (macOS, ~28 ms) la llamada ya
+                        // dura más que el hueco y contarlo desde el final retrasaba cada movimiento otros `move_gap`
+                        last_write = tw;
                         crate::latency::record_write(buf_t.take().map(|t| t.elapsed()), tw.elapsed());
                         buf.clear();
                     }
@@ -703,6 +711,35 @@ mod tests {
         assert!(flat.ends_with(&[4, b'k', b'd', b' ', b'4']), "{flat:?}");
     }
 
+    /// Escritura lenta (con respuesta, como en macOS): el hueco de movimiento cuenta desde el INICIO de la escritura
+    /// anterior, así que el movimiento que esperaba sale en cuanto vuelve la escritura en vez de esperar otro hueco.
+    #[test]
+    fn slow_write_does_not_add_another_motion_gap() {
+        use std::sync::atomic::{AtomicBool, Ordering};
+        let d = MockDongle::new();
+        let entered = Arc::new(AtomicBool::new(false));
+        let stamps: Arc<Mutex<Vec<(Instant, Instant)>>> = Arc::default();
+        let (e2, s2) = (entered.clone(), stamps.clone());
+        d.set_responder(move |w| {
+            let t0 = Instant::now();
+            if w.starts_with(b"\x06mm") && !e2.swap(true, Ordering::SeqCst) {
+                std::thread::sleep(Duration::from_millis(1200)); // primera escritura de movimiento: muy lenta
+            }
+            s2.lock().unwrap().push((t0, Instant::now()));
+            vec![]
+        });
+        let opts = BleOptions { move_gap: Duration::from_millis(1000), ..fast() };
+        let mut t = BleTransport::open(d.connector(), Box::new(TestCodec), opts, Duration::from_secs(20)).unwrap();
+        t.send("mm 1 0", false).unwrap();
+        wait(|| entered.load(Ordering::SeqCst));
+        t.send("mm 2 0", false).unwrap(); // llega mientras la primera escritura está en curso
+        wait(|| stamps.lock().unwrap().len() >= 2);
+        let s = stamps.lock().unwrap();
+        let gap = s[1].0.saturating_duration_since(s[0].1);
+        // antes: ~1000 ms (otro hueco entero contado desde el final de la escritura); ahora: lo que tarde el hilo
+        assert!(gap < Duration::from_millis(500), "el movimiento esperó {gap:?} tras una escritura lenta");
+    }
+
     #[test]
     fn event_to_write_latency_is_recorded_and_small() {
         let d = MockDongle::new();
@@ -748,6 +785,25 @@ mod tests {
         let evs = t.poll_events();
         assert!(evs.contains(&TEvent::StatusLine("host=1 leds=0x01".into())), "{evs:?}");
         assert!(evs.iter().any(|e| matches!(e, TEvent::Rtt(_))));
+    }
+
+    /// `ping_nowait` vuelve sin esperar al pong (aunque tarde) y el RTT llega igualmente como evento.
+    #[test]
+    fn ping_nowait_does_not_block_and_rtt_arrives_as_event() {
+        let d = MockDongle::new(); // sin respondedor: el pong no llega solo (un `ping()` esperaría hasta el plazo)
+        let mut t = open(&d);
+        let t0 = Instant::now();
+        t.ping_nowait().unwrap();
+        assert!(t0.elapsed() < Duration::from_millis(500), "ping_nowait esperó {:?}", t0.elapsed());
+        wait(|| d.writes().iter().any(|w| w[0] == b'p'));
+        let _ = t.poll_events();
+        // el dongle contesta tarde (primer ping = secuencia 1): el RTT aparece en los eventos
+        d.notify(&[b"P".as_slice(), &1u32.to_le_bytes()].concat());
+        let t1 = Instant::now();
+        while !t.poll_events().iter().any(|e| matches!(e, TEvent::Rtt(_))) {
+            assert!(t1.elapsed() < Duration::from_secs(20), "no llegó el RTT");
+            std::thread::sleep(Duration::from_millis(5));
+        }
     }
 
     #[test]

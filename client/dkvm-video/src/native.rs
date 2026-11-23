@@ -8,7 +8,7 @@ use nokhwa::pixel_format::RgbAFormat;
 use nokhwa::utils::ApiBackend;
 use nokhwa::utils::{CameraFormat, CameraIndex, FrameFormat, RequestedFormat, RequestedFormatType, Resolution};
 use nokhwa::Camera;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 #[cfg(target_os = "macos")]
 #[path = "mac.rs"]
@@ -172,7 +172,6 @@ fn run_inner(name: Option<&str>, index: Option<usize>, mode: &Mode, latest: &Lat
         seq += 1;
     }
     let _ = cam.stop_stream();
-    let _ = Duration::ZERO;
     Ok(())
 }
 

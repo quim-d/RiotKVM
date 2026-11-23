@@ -58,4 +58,9 @@ pub trait Transport: Send {
         self.send(&crate::protocol::status(), true)?;
         Ok(t.elapsed())
     }
+    /// Lanza un ping SIN esperar el pong (sesión interactiva: no frena la entrada un RTT cada segundo). El RTT llega
+    /// como `TEvent::Rtt` en `poll_events`. Por defecto (serie/mock) equivale a `ping`.
+    fn ping_nowait(&mut self) -> Result<()> {
+        self.ping().map(|_| ())
+    }
 }
