@@ -3,7 +3,7 @@ name = "riotkvm-cli"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "CLI riotkvm: controla el dongle KVM (teclado y ratón del servidor)"
+description = "CLI riotkvm: controla el dongle RiotKVM (teclado y ratón del servidor)"
 
 [lib]
 name = "riotkvm_cli"

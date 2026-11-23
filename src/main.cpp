@@ -1,4 +1,4 @@
-// Dongle KVM - modo C: microSD (MSC asincrono) + teclado + raton rel/abs (HID) + CDC serie
+// Dongle RiotKVM - modo C: microSD (MSC asincrono) + teclado + raton rel/abs (HID) + CDC serie
 // Etapa 1 (correcciones de la revision fase 3). Orden de arranque: Serial -> SD init -> MSC -> HID -> USB.begin -> pantalla.
 #include <Arduino.h>
 #include "USB.h"

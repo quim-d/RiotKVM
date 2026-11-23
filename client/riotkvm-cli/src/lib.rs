@@ -52,7 +52,7 @@ fn put(w: &SharedWriter, s: &str) {
 }
 
 #[derive(Parser, Debug)]
-#[command(name = "riotkvm", version, about = "riotkvm: controla el dongle KVM (teclado y ratón del servidor).", long_about = None)]
+#[command(name = "riotkvm", version, about = "riotkvm: controla el dongle RiotKVM (teclado y ratón del servidor).", long_about = None)]
 pub struct Cli {
     /// Puerto serie (COM5, /dev/ttyACM0), 'ble', 'mock' o 'ble-mock' (dongle BLE simulado).
     /// Por defecto: BLE si hay un dongle anunciando; si no, serie (autodetecta VID 1209:0001).

@@ -66,7 +66,7 @@ def with_kvm(fn):
 @click.version_option(__version__, prog_name="riotkvm")
 @click.pass_context
 def cli(ctx, port, layout, screen, as_json, verbose):
-    """riotkvm: controla el dongle KVM (teclado y ratón del servidor)."""
+    """riotkvm: controla el dongle RiotKVM (teclado y ratón del servidor)."""
     try:
         scr = parse_screen(screen) if screen else None
     except UsageError as e:
