@@ -291,14 +291,13 @@ struct Waiting {
 }
 
 /// Hilo del enlace: conectar -> servir -> (perdido) -> esperar -> conectar...
-#[allow(unused_assignments)]
+#[allow(unused_assignments)] // `write_buf!` reinicia estado que en algunas expansiones ya no se vuelve a leer
 fn link_thread(mut connector: Box<dyn GattConnector>, mut codec: Box<dyn Codec>, opts: BleOptions, rx: Receiver<Inbox>, tx: Sender<Inbox>, sh: Arc<Shared>) {
     crate::rt::boost_current_thread();
     let mut attempt = 0u32;
     let mut seq = 0u32;
     'outer: loop {
         // ---- conectar
-        let mut last_reason = String::new();
         let link = loop {
             // atender órdenes de cierre mientras no hay enlace; el resto se descarta (no se acumula entrada vieja)
             loop {
@@ -322,8 +321,7 @@ fn link_thread(mut connector: Box<dyn GattConnector>, mut codec: Box<dyn Codec>,
                 Ok(l) => break l,
                 Err(e) => {
                     attempt += 1;
-                    last_reason = e.message().to_string();
-                    set_state(&sh, LinkState::Reconnecting { attempt, reason: last_reason.clone() });
+                    set_state(&sh, LinkState::Reconnecting { attempt, reason: e.message().to_string() });
                     let wait = opts.backoff.get((attempt as usize - 1).min(opts.backoff.len().saturating_sub(1))).copied().unwrap_or(Duration::from_secs(1));
                     // espera interrumpible por Close
                     let t0 = Instant::now();
@@ -342,7 +340,6 @@ fn link_thread(mut connector: Box<dyn GattConnector>, mut codec: Box<dyn Codec>,
                 }
             }
         };
-        let _ = last_reason;
         let mut link = link;
         // compatibilidad de protocolo: se lee INFO antes de dar el enlace por bueno
         if let Ok(info) = link.read_info() {
