@@ -248,3 +248,23 @@ fn ble_mock_refuses_serial_only_commands_with_a_clear_error() {
     assert_eq!(o.code, 2);
     assert!(o.stderr.contains("solo existe por CDC"), "{}", o.stderr);
 }
+
+#[test]
+fn led_sets_and_shows_over_ble_and_serial_mocks() {
+    for port in ["ble-mock", "mock"] {
+        let o = invoke_full(&["-p", port, "led", "ff8800", "--brillo", "60"], "", None, vec![]);
+        assert_eq!(o.code, 0, "{port}: {}", o.stderr);
+        assert!(o.stdout.contains("luz: FF8800@60"), "{port}: {}", o.stdout);
+        let o = invoke_full(&["-p", port, "--json", "led", "off"], "", None, vec![]);
+        assert_eq!(o.code, 0, "{port}: {}", o.stderr);
+        assert_eq!(json_last(&o.stdout)["led"], "off");
+        let o = invoke_full(&["-p", port, "led"], "", None, vec![]);
+        assert_eq!(o.code, 0, "{port}: {}", o.stderr);
+        assert!(o.stdout.contains("luz: "), "{port}: {}", o.stdout);
+    }
+    for bad in [vec!["led", "rojo"], vec!["led", "auto", "--brillo", "5"], vec!["led", "ff0000", "--brillo", "101"]] {
+        let mut a = vec!["-p", "ble-mock"];
+        a.extend(bad.iter());
+        assert_eq!(invoke_full(&a, "", None, vec![]).code, 2, "{bad:?}");
+    }
+}

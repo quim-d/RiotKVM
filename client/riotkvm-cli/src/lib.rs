@@ -142,6 +142,14 @@ enum Cmd {
     },
     /// Suelta todas las teclas y botones (por si algo se quedó pulsado).
     Release,
+    /// Luz del dongle (firmware 1.2.0+, se guarda en el dongle): riotkvm led auto | off | ff8800 [--brillo 60]. Sin valor, la muestra.
+    Led {
+        /// auto, off o un color RRGGBB.
+        valor: Option<String>,
+        /// Brillo del color, 0..100 % (defecto 35, el de automático).
+        #[arg(long, alias = "bright", value_parser = clap::value_parser!(u8).range(0..=100))]
+        brillo: Option<u8>,
+    },
     /// Mueve el ratón. Absoluto: X Y en 0..32767 (o píxeles con --screen). Relativo: dx dy.
     Mouse {
         #[arg(allow_negative_numbers = true)]
@@ -396,6 +404,32 @@ fn dispatch(app: &mut App) -> Result<i32> {
                     }
                 }
                 app.emit(json!({ "keys": combos }), None);
+                Ok(())
+            })?;
+            Ok(0)
+        }
+        Cmd::Led { valor, brillo } => {
+            let want = match valor.as_deref() {
+                None => {
+                    if brillo.is_some() {
+                        return Err(Error::Usage("--brillo necesita un color: riotkvm led ff8800 --brillo 60".into()));
+                    }
+                    None
+                }
+                Some(v) => Some(match (riotkvm_core::Led::parse(v)?, *brillo) {
+                    (riotkvm_core::Led::Color { rgb, .. }, Some(b)) => riotkvm_core::Led::Color { rgb, bright: b },
+                    (_, Some(_)) => return Err(Error::Usage("--brillo solo vale con un color (no con auto/off)".into())),
+                    (l, None) => l,
+                }),
+            };
+            app.with_kvm(|app, kvm| {
+                if let Some(l) = want {
+                    kvm.set_led(l)?;
+                }
+                // confirma con `info`: un firmware viejo no publica `led=` (por BLE su ERR puede llegar tarde)
+                let cur = kvm.led()?.ok_or_else(|| Error::Device(riotkvm_core::led::UNSUPPORTED.into()))?;
+                let shown = want.unwrap_or(cur); // BLE: INFO puede leerse antes de que el dongle aplique SET_LED
+                app.emit(json!({ "led": shown.to_string() }), Some(format!("luz: {shown}")));
                 Ok(())
             })?;
             Ok(0)
