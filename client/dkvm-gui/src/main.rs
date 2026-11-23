@@ -11,6 +11,7 @@ mod app;
 mod clip;
 mod dlog;
 mod hook;
+mod settings;
 mod theme;
 
 use app::{App, MouseMode, Options};
@@ -238,10 +239,10 @@ fn main() -> eframe::Result {
         Box::new(move |cc| {
             let ctx = cc.egui_ctx.clone();
             theme::apply(&ctx);
-            let session = Session::spawn(connector, &layout, Some(Box::new({
+            let session = Session::spawn_with(connector, &layout, Some(Box::new({
                 let c = ctx.clone();
                 move || c.request_repaint()
-            })))?;
+            })), settings::initial_session_opts())?;
             let video = app::VideoCtl::start(source, video_desc, mode, ctx);
             Ok(Box::new(App::new(cc, session, video, opts)))
         }),

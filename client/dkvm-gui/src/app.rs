@@ -199,6 +199,7 @@ pub struct App {
     rep_combo: String,
     rep_interval: u32,
     rep_secs: f32,
+    settings: crate::settings::Settings,
 }
 
 /// Combinaciones que el SO local intercepta o son incómodas de teclear.
@@ -311,6 +312,7 @@ impl App {
             rep_combo: "f2".into(),
             rep_interval: 250,
             rep_secs: 10.0,
+            settings: crate::settings::Settings::new(),
         };
         app.layout = dkvm_core::layouts::canonical(&app.opts.layout).unwrap_or("es").to_string();
         app.modes = app.opts.modes.clone();
@@ -528,6 +530,14 @@ impl App {
             Action::CancelPending => self.pending = None,
             Action::StopJob => self.cancel_job(),
         }
+    }
+
+    /// Distribución del teclado del servidor (barra "Teclado" y Ajustes): se guarda y se aplica en caliente.
+    fn set_layout(&mut self, n: &'static str) {
+        self.layout = n.to_string();
+        dkvm_core::config::save_layout(n);
+        self.send(Cmd::SetLayout(n.to_string()));
+        self.note(format!("distribución del teclado del servidor: {}", dkvm_core::layouts::layout_label(n)), false);
     }
 
     fn send(&self, c: Cmd) {
@@ -948,10 +958,7 @@ impl eframe::App for App {
                         }
                     }
                     if let Some(n) = pick_layout {
-                        self.layout = n.to_string();
-                        dkvm_core::config::save_layout(n);
-                        self.send(Cmd::SetLayout(n.to_string()));
-                        self.note(format!("distribución del teclado del servidor: {}", dkvm_core::layouts::layout_label(n)), false);
+                        self.set_layout(n);
                         ui.close();
                     }
                 });
@@ -1004,14 +1011,9 @@ impl eframe::App for App {
                     ui.add(egui::Slider::new(&mut self.paste.per_key_ms, 0..=50).text("ms por tecla"));
                     ui.checkbox(&mut self.paste.confirm_always, format!("confirmar siempre (si no, solo > {CONFIRM_OVER} caracteres)"));
                 });
-                ui.menu_button("Ajustes", |ui| {
-                    ui.label(egui::RichText::new("información").color(theme::GRIS));
-                    ui.label(format!("ratón: {}", if self.mode == MouseMode::Absolute { "absoluto" } else { "relativo (BIOS)" }));
-                    ui.label(format!("soltar la captura: {}", hook::ESCAPE_HELP));
-                    ui.label(format!("pegar el portapapeles: {}", self.opts.paste_chord.label()));
-                    ui.separator();
-                    ui.label(egui::RichText::new(format!("QKVM {} · {}", env!("CARGO_PKG_VERSION"), self.opts.transport_desc)).color(theme::GRIS));
-                });
+                if ui.selectable_label(self.settings.open, "Ajustes").clicked() {
+                    self.settings.open = !self.settings.open;
+                }
                 let info = self.video.latest.info();
                 ui.label(egui::RichText::new(if info.is_empty() { self.video.desc.clone() } else { info }).color(theme::GRIS));
             });
@@ -1172,6 +1174,16 @@ impl eframe::App for App {
                     }
                 });
             });
+        }
+        // ---- ventana de Ajustes (settings.rs)
+        let info = crate::settings::Info { layout: &self.layout, mouse_abs: self.mode == MouseMode::Absolute, paste_chord: self.opts.paste_chord.label(), transport: &self.opts.transport_desc };
+        match self.settings.show(&ctx, &info) {
+            Some(crate::settings::Change::Layout(n)) => self.set_layout(n),
+            Some(crate::settings::Change::Opts(o, msg)) => {
+                self.send(Cmd::SetOpts(o));
+                self.note(msg, false);
+            }
+            None => {}
         }
         if self.paste != paste_before {
             self.paste.save();
