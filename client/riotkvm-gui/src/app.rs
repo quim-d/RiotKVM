@@ -1114,11 +1114,8 @@ impl eframe::App for App {
                 img_rect = Rect::from_center_size(avail.center(), Vec2::new(vw * s, vh * s));
                 ui.painter().image(t.id(), img_rect, Rect::from_min_max(Pos2::ZERO, Pos2::new(1.0, 1.0)), Color32::WHITE);
                 if self.captured {
-                    let galley = ui.painter().layout_no_wrap(format!("Soltar: {}", hook::ESCAPE_HELP), egui::FontId::proportional(15.0), Color32::BLACK);
-                    let c = img_rect.left_top() + Vec2::new(10.0, 8.0);
-                    ui.painter().rect_filled(Rect::from_min_size(c, galley.size() + Vec2::new(12.0, 6.0)), 4.0, Color32::from_rgba_unmultiplied(255, 200, 0, 220));
-                    ui.painter().galley(c + Vec2::new(6.0, 3.0), galley, Color32::BLACK);
-                    ui.painter().rect_stroke(img_rect, 0.0, egui::Stroke::new(2.0, theme::AMBAR), egui::StrokeKind::Inside);
+                    // marco verde mientras hay captura (el atajo para soltar ya está en la barra inferior)
+                    ui.painter().rect_stroke(img_rect, 0.0, egui::Stroke::new(2.0, theme::VERDE), egui::StrokeKind::Inside);
                 }
             } else {
                 img_rect = avail;
