@@ -1014,7 +1014,7 @@ impl eframe::App for App {
                     ui.add(egui::Slider::new(&mut self.paste.per_key_ms, 0..=50).text("ms por tecla"));
                     ui.checkbox(&mut self.paste.confirm_always, format!("confirmar siempre (si no, solo > {CONFIRM_OVER} caracteres)"));
                 });
-                if ui.selectable_label(self.settings.open, "Ajustes").clicked() {
+                if ui.add(egui::Button::new("Ajustes").selected(self.settings.open)).clicked() {
                     self.settings.open = !self.settings.open;
                 }
                 if ui.button("Tools").on_hover_text("Flashear el firmware del dongle · preparar una microSD con Ventoy").clicked() {
