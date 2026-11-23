@@ -3,8 +3,10 @@
 // releases (.github/workflows/release.yml lee las lineas `#define QKVM_... <numero>` con sed: no cambies su formato).
 #pragma once
 
+// Empieza en 1.1.0 y no en 1.0.0: los firmwares anteriores al versionado ya anunciaban 1.0 por INFO BLE (patch 0),
+// asi que 1.0.0 seria indistinguible de ellos para el comprobador de versiones.
 #define QKVM_FW_MAJOR 1
-#define QKVM_FW_MINOR 0
+#define QKVM_FW_MINOR 1
 #define QKVM_FW_PATCH 0
 
 // Version del contrato BLE de docs/PROTOCOL.md. Solo sube con un cambio incompatible (el cliente rechaza otra).

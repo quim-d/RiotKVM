@@ -115,7 +115,7 @@ Codigos ERR: 1 `BUSY` (informe perdido: endpoint ocupado/host suspendido que no 
 ```
 Se puede leer en cualquier momento (no hace falta suscribirse).
 
-Version del firmware = `fw_major.fw_minor.fw_patch` (semver, fuente unica `src/version.h`). `fw_patch` ocupa el byte [6], antes "reservado (0)": es compatible con proto=1 porque los clientes anteriores solo leen [0..5], y un firmware anterior lo deja a 0 (se lee como `X.Y.0`). No sube `proto_version`. Los clientes deben seguir ignorando el byte [7] y aceptar INFO de mas de 8 bytes.
+Version del firmware = `fw_major.fw_minor.fw_patch` (semver, fuente unica `src/version.h`). `fw_patch` ocupa el byte [6], antes "reservado (0)": es compatible con proto=1 porque los clientes anteriores solo leen [0..5], y un firmware anterior lo deja a 0 (se lee como `X.Y.0`: los anteriores al versionado anunciaban 1.0, es decir `1.0.0`; por eso la primera version semver es 1.1.0). No sube `proto_version`. Los clientes deben seguir ignorando el byte [7] y aceptar INFO de mas de 8 bytes.
 
 ## Orden de peticiones recomendado para el cliente
 1. Escanear por UUID de servicio (o nombre `QKVM` (antes `QuimKVM`; el UUID no cambia, el cliente busca por UUID)); conectar; negociar MTU (247).

@@ -2,7 +2,8 @@
 //!
 //! Fuentes: INFO BLE (bytes [1] major, [2] minor, [6] patch; un firmware anterior deja [6] a 0) y el campo
 //! `fw=` de la respuesta a `info` (CDC: `fw=1.0.0 name=QKVM ...`; BLE ya formateado: `proto=1 fw=1.0.0 ...`).
-//! Firmwares previos al versionado responden `fw=etapa2`: eso no es una versión y da `None`.
+//! Firmwares previos al versionado responden `fw=etapa2` por CDC (no es una versión: `None`) y 1.0 por INFO BLE
+//! (`1.0.0`); la primera versión semver es la 1.1.0, así que ambos casos quedan por debajo de cualquier release.
 
 use std::fmt;
 use std::str::FromStr;
