@@ -56,8 +56,8 @@ def v1(t):
         closed = 760 <= t < 820 or 980 <= t < 1040
         eyes(d, 4, 8, GREEN if t < 700 else MAG, closed)
     if 300 <= t < 800 and random.random() < .3:
-        typed(d, "QKVM", 74, 8, t, 300, 60, MAG, F2); typed(d, "QKVM", 78, 8, t, 300, 60, CY, F2)
-    typed(d, "QKVM", 76, 8, t, 300, 60, GREEN, F2)
+        typed(d, "RiotKVM", 75, 12, t, 300, 60, MAG, F2); typed(d, "RiotKVM", 77, 12, t, 300, 60, CY, F2)
+    typed(d, "RiotKVM", 76, 12, t, 300, 60, GREEN, F2)
     typed(d, "[ OK ] usb", 76, 36, t, 640, 20, GREEN); typed(d, "[ OK ] hid", 76, 46, t, 780, 20, GREEN)
     typed(d, "[ OK ] ble", 76, 56, t, 920, 20, GREEN); typed(d, "mode C", 76, 68, t, 1050, 30, AMB)
     return im
@@ -78,7 +78,7 @@ def v2(t):
         for xx in range(90, 154):
             if sp[xx, yy] != (0, 0, 0) and BAYER[yy % 4][xx % 4] < lvl: px[xx, yy] = sp[xx, yy]
     if t >= 850: eyes(d, 90, 8, CY if t < 1050 else MAG, 1000 <= t < 1060)
-    if t >= 900: typed(d, "QKVM", 3, 62, t, 900, 40, AMB)
+    if t >= 900: typed(d, "RiotKVM", 3, 62, t, 900, 40, AMB)
     return im
 
 # V3 APERTURA: calavera centrada se abre desde el centro, tibias entran por los lados, flash y desliza a la izq. + titulo
@@ -92,7 +92,7 @@ def v3(t):
     if t >= 320:
         col = (255, 255, 255) if t < 400 else GREEN if t < 600 else CY if t < 800 else MAG
         eyes(d, ox, 8, col, 880 <= t < 940)
-    if 650 <= t: typed(d, "QKVM", 76, 14, t, 780, 45, GREEN, F2); typed(d, "ready_", 76, 44, t, 1040, 40, AMB)
+    if 650 <= t: typed(d, "RiotKVM", 76, 18, t, 780, 45, GREEN, F2); typed(d, "ready_", 76, 44, t, 1040, 40, AMB)
     if 700 <= t < 900 and random.random() < .4: d.line((76, 14 + random.randint(0, 24), 150, 14 + random.randint(0, 24)), fill=DG)
     return im
 
@@ -130,7 +130,7 @@ MODES = {"A": ("CARGO", AMB, "SD+USB", [("sd", "[ OK ]", GREEN, "58.3G", CY), ("
          "C": ("FULL", GREEN, "TODO", [("ble", "[ OK ]", GREEN, "linked", MAG), ("sd", "[ OK ]", GREEN, "58.3G", CY), ("usb", "[ OK ]", GREEN, "host", CY), ("hid", "[used]", MAG, "", GREEN)])}
 for k, (nm, acc, sub, rows) in MODES.items():
     im = Image.new("RGB", (W, H)); d = ImageDraw.Draw(im); IM = im
-    d.rectangle((0, 0, W, 10), fill=acc); d.text((2, 0), "%s %s" % (k, nm), fill=(0, 0, 0), font=F); d.text((W - 2 - 6 * 4, 0), "QKVM", fill=(0, 0, 0), font=F)
+    d.rectangle((0, 0, W, 10), fill=acc); d.text((2, 0), "%s %s" % (k, nm), fill=(0, 0, 0), font=F); d.text((W - 2 - 6 * 7, 0), "RiotKVM", fill=(0, 0, 0), font=F)
     d.rectangle((0, 11, 2, H), fill=acc) if False else None
     im.paste(icon(k, acc, MAG), (4, 20))
     d.text((4, 64), sub, fill=acc, font=F)

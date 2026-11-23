@@ -1,6 +1,6 @@
 """Genera el tema GRUB2 de Ventoy con la estetica RiotKVM (docs/DESIGN.md) en packaging/ventoy-theme/.
 
-Salida (lo que dkvm-flash copia a /ventoy/theme/ de la particion exFAT):
+Salida (lo que riotkvm-flash copia a /ventoy/theme/ de la particion exFAT):
   riotkvm/   theme_<WxH>_<n>.txt + bg_<WxH>_<n>.png (una por consigna del pie), pixmaps 9-slice de 1 px e icons/
   fonts/  JetBrains Mono en .pf2 (solo con --fonts: necesita grub-mkfont) + OFL.txt
 

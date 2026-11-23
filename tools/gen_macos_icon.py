@@ -1,6 +1,6 @@
 import sys
-# Genera packaging/macos/QKVM.iconset desde dkvm-gui/assets/skull_64.png (calavera pixel-art sobre placa negra con borde verde).
-# Uso: python3 tools/gen_macos_icon.py client/dkvm-gui/assets/skull_64.png QKVM.iconset && iconutil -c icns QKVM.iconset -o packaging/macos/RiotKVM.icns
+# Genera packaging/macos/RiotKVM.iconset desde riotkvm-gui/assets/skull_64.png (calavera pixel-art sobre placa negra con borde verde).
+# Uso: python3 tools/gen_macos_icon.py client/riotkvm-gui/assets/skull_64.png RiotKVM.iconset && iconutil -c icns RiotKVM.iconset -o packaging/macos/RiotKVM.icns
 from PIL import Image, ImageDraw
 src = Image.open(sys.argv[1]).convert("RGBA"); out = sys.argv[2]
 def icon(n):
