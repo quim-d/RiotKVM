@@ -211,7 +211,8 @@ jobs:
           def() { sed -n "s/^#define QKVM_$1 \([0-9][0-9]*\)[[:space:]]*$/\1/p" src/version.h; }
           V="$(def FW_MAJOR).$(def FW_MINOR).$(def FW_PATCH)"
           P="$(def BLE_PROTO)"
-          if ! echo "$V" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' || [ -z "$P" ]; then
+          # =~ mira la cadena entera: un #define repetido (dos líneas) también falla
+          if ! [[ $V =~ ^[0-9]+\.[0-9]+\.[0-9]+$ && $P =~ ^[0-9]+$ ]]; then
             echo "::error::no se pudo leer la versión de src/version.h (fw=$V proto=$P)"; exit 1
           fi
           N="$V"; [ "$GITHUB_REF_TYPE" = "tag" ] || N="$V-dev"
@@ -234,11 +235,16 @@ jobs:
       - name: Compilar
         run: pio run -e tdongle-s3
 
-      # firmware.factory.bin (bootloader + particiones + app desde 0x0) es el que escribe tools/flash.py
+      # firmware.factory.bin (bootloader + particiones + app desde 0x0) es el que escribe tools/flash.py.
+      # El `info` CDC compilado debe decir la misma versión que se publica en el nombre y en manifest.json.
       - name: Empaquetar
         run: |
+          B=.pio/build/tdongle-s3/firmware.factory.bin
+          if ! grep -aqF "fw=${{ steps.ver.outputs.v }} name=QKVM proto=${{ steps.ver.outputs.proto }} " "$B"; then
+            echo "::error::el binario no contiene fw=${{ steps.ver.outputs.v }} proto=${{ steps.ver.outputs.proto }} (¿src/version.h con otro formato?)"; exit 1
+          fi
           mkdir -p dist
-          cp .pio/build/tdongle-s3/firmware.factory.bin "dist/${{ steps.ver.outputs.asset }}"
+          cp "$B" "dist/${{ steps.ver.outputs.asset }}"
           ls -l dist
 
       - uses: actions/upload-artifact@v4
